@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 트레이딩 시그널 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin { animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-slate-100">
+    <div id="app"></div>
+
+    <script type="module">
+        const API_BASE = 'http://localhost:8000';
+
+        const App = {
+            signals: [],
+            stats: null,
+            loading: true,
+            autoRefresh: true,
+            filters: {
+                symbol: '',
+                tf: '',
+                strategy: '',
+                direction: '',
+                hours: 24,
+                sort: 'desc'  // desc: 최신순, asc: 오래된순
+            },
+
+            async fetchData() {
+                try {
+                    this.loading = true;
+                    this.render();
+
+                    const params = new URLSearchParams();
+                    Object.entries(this.filters).forEach(([key, value]) => {
+                        if (value) params.append(key, value);
+                    });
+
+                    const [signalsRes, statsRes] = await Promise.all([
+                        fetch(`${API_BASE}/api/signals?${params}`),
+                        fetch(`${API_BASE}/api/stats?hours=${this.filters.hours}`)
+                    ]);
+
+                    let signals = await signalsRes.json();
+                    this.stats = await statsRes.json();
+                    
+                    // 정렬 적용
+                    signals.sort((a, b) => {
+                        const dateA = new Date(a.open_time);
+                        const dateB = new Date(b.open_time);
+                        return this.filters.sort === 'desc' ? dateB - dateA : dateA - dateB;
+                    });
+                    
+                    this.signals = signals;
+                } catch (error) {
+                    console.error('데이터 로드 실패:', error);
+                    alert('API 연결 실패. FastAPI 서버가 실행 중인지 확인하세요.');
+                } finally {
+                    this.loading = false;
+                    this.render();
+                }
+            },
+
+            getBiasColor(bias) {
+                if (bias === 'bull') return 'text-green-600 bg-green-50';
+                if (bias === 'bear') return 'text-red-600 bg-red-50';
+                return 'text-gray-600 bg-gray-50';
+            },
+
+            getOutcomeColor(result) {
+                if (result === 'profit') return 'text-green-700 bg-green-100';
+                if (result === 'loss') return 'text-red-700 bg-red-100';
+                return 'text-yellow-700 bg-yellow-100';
+            },
+
+            formatTime(dateStr) {
+                if (!dateStr) return '-';
+                const date = new Date(dateStr);
+                
+                // DB에 이미 KST(+9)로 저장되어 있으므로 그대로 사용
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                
+                return `${month}/${day} ${hours}:${minutes} KST`;
+            },
+
+            render() {
+                const app = document.getElementById('app');
+                app.innerHTML = `
+                    <div class="min-h-screen p-6">
+                        <div class="max-w-7xl mx-auto">
+                            <!-- Header -->
+                            <div class="mb-8">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h1 class="text-4xl font-bold text-slate-800">
+                                        📊 실시간 트레이딩 시그널
+                                    </h1>
+                                    <div class="flex gap-2">
+                                        <button id="toggleAutoRefresh" class="px-4 py-2 rounded-lg font-medium transition ${
+                                            this.autoRefresh ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-700'
+                                        }">
+                                            ${this.autoRefresh ? '자동갱신 ON' : '자동갱신 OFF'}
+                                        </button>
+                                        <button id="refreshBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition">
+                                            🔄 새로고침
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Stats -->
+                                ${this.stats ? `
+                                    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+                                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                            <div class="text-sm text-slate-600 mb-1">총 시그널</div>
+                                            <div class="text-2xl font-bold text-slate-800">${this.stats.total_signals}</div>
+                                        </div>
+                                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                            <div class="text-sm text-slate-600 mb-1">승률</div>
+                                            <div class="text-2xl font-bold text-blue-600">
+                                                ${this.stats.win_rate ? `${(this.stats.win_rate * 100).toFixed(1)}%` : '-'}
+                                            </div>
+                                        </div>
+                                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                            <div class="text-sm text-slate-600 mb-1">평균 R</div>
+                                            <div class="text-2xl font-bold text-purple-600">
+                                                ${this.stats.avg_r_multiple ? this.stats.avg_r_multiple.toFixed(2) : '-'}
+                                            </div>
+                                        </div>
+                                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                            <div class="text-sm text-green-600 mb-1">수익</div>
+                                            <div class="text-2xl font-bold text-green-700">${this.stats.total_profit_signals}</div>
+                                        </div>
+                                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                            <div class="text-sm text-red-600 mb-1">손실</div>
+                                            <div class="text-2xl font-bold text-red-700">${this.stats.total_loss_signals}</div>
+                                        </div>
+                                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                            <div class="text-sm text-slate-600 mb-1">최고 전략</div>
+                                            <div class="text-lg font-bold text-amber-600 truncate">
+                                                ${this.stats.best_strategy || '-'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+
+                            <!-- Filters -->
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span>🔍</span>
+                                    <h2 class="font-semibold text-slate-700">필터</h2>
+                                </div>
+                                <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+                                    <input type="text" id="filterSymbol" placeholder="심볼 (예: BTCUSDT)" 
+                                        value="${this.filters.symbol}"
+                                        class="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                    <select id="filterTf" class="px-3 py-2 border border-slate-300 rounded-lg">
+                                        <option value="">모든 타임프레임</option>
+                                        <option value="30m" ${this.filters.tf === '30m' ? 'selected' : ''}>30m</option>
+                                        <option value="4h" ${this.filters.tf === '4h' ? 'selected' : ''}>4h</option>
+                                        <option value="1d" ${this.filters.tf === '1d' ? 'selected' : ''}>1d</option>
+                                    </select>
+                                    <input type="text" id="filterStrategy" placeholder="전략" 
+                                        value="${this.filters.strategy}"
+                                        class="px-3 py-2 border border-slate-300 rounded-lg">
+                                    <select id="filterDirection" class="px-3 py-2 border border-slate-300 rounded-lg">
+                                        <option value="">모든 방향</option>
+                                        <option value="long" ${this.filters.direction === 'long' ? 'selected' : ''}>Long</option>
+                                        <option value="short" ${this.filters.direction === 'short' ? 'selected' : ''}>Short</option>
+                                    </select>
+                                    <select id="filterHours" class="px-3 py-2 border border-slate-300 rounded-lg">
+                                        <option value="6" ${this.filters.hours === 6 ? 'selected' : ''}>최근 6시간</option>
+                                        <option value="24" ${this.filters.hours === 24 ? 'selected' : ''}>최근 24시간</option>
+                                        <option value="72" ${this.filters.hours === 72 ? 'selected' : ''}>최근 3일</option>
+                                        <option value="168" ${this.filters.hours === 168 ? 'selected' : ''}>최근 7일</option>
+                                    </select>
+                                    <select id="filterSort" class="px-3 py-2 border border-slate-300 rounded-lg">
+                                        <option value="desc" ${this.filters.sort === 'desc' ? 'selected' : ''}>⬇️ 최신순</option>
+                                        <option value="asc" ${this.filters.sort === 'asc' ? 'selected' : ''}>⬆️ 오래된순</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Signals -->
+                            <div class="space-y-4">
+                                ${this.loading && this.signals.length === 0 ? `
+                                    <div class="text-center py-12 text-slate-500">
+                                        <div class="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                                        데이터 로딩 중...
+                                    </div>
+                                ` : this.signals.length === 0 ? `
+                                    <div class="text-center py-12 text-slate-500">
+                                        ⚠️ 시그널이 없습니다
+                                    </div>
+                                ` : this.signals.map(signal => `
+                                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hover:shadow-md transition">
+                                        <div class="flex items-start justify-between mb-4">
+                                            <div class="flex items-center gap-3 flex-wrap">
+                                                <div class="px-3 py-1 rounded-full text-sm font-semibold ${
+                                                    signal.direction === 'long' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                                }">
+                                                    ${signal.direction === 'long' ? '📈' : '📉'} ${signal.direction?.toUpperCase()}
+                                                </div>
+                                                <h3 class="text-xl font-bold text-slate-800">${signal.symbol}</h3>
+                                                <span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded">
+                                                    ${signal.tf}
+                                                </span>
+                                                <span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
+                                                    ${signal.strategy}
+                                                </span>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="text-xs text-slate-500">발생시간</div>
+                                                <div class="text-sm font-medium text-slate-700">${this.formatTime(signal.open_time)}</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">
+                                            <div>
+                                                <div class="text-slate-500 mb-1">진입가</div>
+                                                <div class="font-semibold text-slate-800">${signal.entry?.toFixed(4) || '-'}</div>
+                                            </div>
+                                            <div>
+                                                <div class="text-slate-500 mb-1">손절가</div>
+                                                <div class="font-semibold text-red-600">${signal.stop_loss?.toFixed(4) || '-'}</div>
+                                            </div>
+                                            <div>
+                                                <div class="text-slate-500 mb-1">목표가 1</div>
+                                                <div class="font-semibold text-green-600">${signal.take_profit_1?.toFixed(4) || '-'}</div>
+                                            </div>
+                                            <div>
+                                                <div class="text-slate-500 mb-1">점수</div>
+                                                <div class="font-semibold text-purple-600">${signal.score?.toFixed(2) || '-'}</div>
+                                            </div>
+                                        </div>
+
+                                        ${signal.llm_headline ? `
+                                            <div class="border-t border-slate-200 pt-4 mt-4">
+                                                <div class="flex items-center gap-2 mb-2">
+                                                    <div class="px-2 py-1 rounded text-xs font-semibold ${this.getBiasColor(signal.llm_bias)}">
+                                                        ${signal.llm_bias?.toUpperCase() || 'NEUTRAL'}
+                                                    </div>
+                                                    <div class="text-xs text-slate-500">
+                                                        신뢰도: ${signal.llm_confidence ? `${(signal.llm_confidence * 100).toFixed(0)}%` : '-'}
+                                                    </div>
+                                                </div>
+                                                <div class="font-medium text-slate-800 mb-2">${signal.llm_headline}</div>
+                                                
+                                                ${signal.llm_evidence && signal.llm_evidence.length > 0 ? `
+                                                    <div class="mb-2">
+                                                        <div class="text-xs font-semibold text-slate-600 mb-1">근거:</div>
+                                                        <ul class="text-xs text-slate-700 space-y-1">
+                                                            ${signal.llm_evidence.slice(0, 3).map(ev => 
+                                                                `<li class="pl-3 border-l-2 border-blue-300">• ${ev}</li>`
+                                                            ).join('')}
+                                                        </ul>
+                                                    </div>
+                                                ` : ''}
+                                                
+                                                ${signal.llm_risks && signal.llm_risks.length > 0 ? `
+                                                    <div>
+                                                        <div class="text-xs font-semibold text-slate-600 mb-1">리스크:</div>
+                                                        <ul class="text-xs text-red-700 space-y-1">
+                                                            ${signal.llm_risks.slice(0, 2).map(risk => 
+                                                                `<li class="pl-3 border-l-2 border-red-300">⚠ ${risk}</li>`
+                                                            ).join('')}
+                                                        </ul>
+                                                    </div>
+                                                ` : ''}
+                                            </div>
+                                        ` : ''}
+
+                                        ${signal.outcome_result ? `
+                                            <div class="border-t border-slate-200 pt-3 mt-3">
+                                                <div class="flex items-center justify-between">
+                                                    <div class="flex items-center gap-3">
+                                                        <span class="px-3 py-1 rounded-full text-sm font-semibold ${this.getOutcomeColor(signal.outcome_result)}">
+                                                            ${signal.outcome_result === 'profit' ? '✓ 수익' : signal.outcome_result === 'loss' ? '✗ 손실' : '진행중'}
+                                                        </span>
+                                                        ${signal.outcome_r_multiple ? `
+                                                            <span class="text-sm font-bold ${signal.outcome_r_multiple > 0 ? 'text-green-600' : 'text-red-600'}">
+                                                                R: ${signal.outcome_r_multiple.toFixed(2)}
+                                                            </span>
+                                                        ` : ''}
+                                                    </div>
+                                                    ${signal.outcome_exit_time ? `
+                                                        <div class="text-xs text-slate-500">
+                                                            종료: ${this.formatTime(signal.outcome_exit_time)}
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                this.attachEventListeners();
+            },
+
+            attachEventListeners() {
+                document.getElementById('refreshBtn')?.addEventListener('click', () => this.fetchData());
+                document.getElementById('toggleAutoRefresh')?.addEventListener('click', () => {
+                    this.autoRefresh = !this.autoRefresh;
+                    this.render();
+                    if (this.autoRefresh) this.startAutoRefresh();
+                });
+
+                const filterInputs = ['Symbol', 'Tf', 'Strategy', 'Direction', 'Hours', 'Sort'];
+                filterInputs.forEach(name => {
+                    const el = document.getElementById(`filter${name}`);
+                    el?.addEventListener('change', (e) => {
+                        const key = name.toLowerCase();
+                        if (name === 'Hours') {
+                            this.filters[key] = parseInt(e.target.value);
+                        } else if (name === 'Sort') {
+                            this.filters[key] = e.target.value;
+                        } else {
+                            this.filters[key] = e.target.value.toUpperCase();
+                        }
+                        this.fetchData();
+                    });
+                });
+            },
+
+            startAutoRefresh() {
+                setInterval(() => {
+                    if (this.autoRefresh) this.fetchData();
+                }, 30000);
+            },
+
+            async init() {
+                await this.fetchData();
+                this.startAutoRefresh();
+            }
+        };
+
+        App.init();
+    </script>
+</body>
+</html>

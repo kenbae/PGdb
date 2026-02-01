@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historical Data Dashboard v2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .card { transition: all 0.3s ease; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); }
+        .number-animate { transition: all 0.5s ease; }
+        .updating { animation: pulse 1s ease-in-out; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .grid-row:hover { background-color: #f9fafb; }
+        .filter-active { background-color: #3b82f6; color: white; }
+        .font-semibold { font-weight: 600; text-align: right; }
+        .text-gray-500 {
+            --tw-text-opacity: 1;
+            color: rgb(107 114 128 / var(--tw-text-opacity, 1));
+            text-align: right;
+            }
+
+<style>
+.text-
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center">
+        <div class="bg-white rounded-lg p-8 shadow-2xl">
+            <div class="flex flex-col items-center">
+                <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mb-4"></div>
+                <p class="text-lg font-semibold text-gray-800" id="loading-text">데이터 로딩 중...</p>
+                <div class="w-64 h-2 bg-gray-200 rounded-full mt-4 overflow-hidden">
+                    <div id="progress-bar" class="h-full bg-blue-600 transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">📊 Historical Data Dashboard v2</h1>
+            <p class="text-gray-600">과거 데이터 현황 및 분석</p>
+            <div class="mt-4 flex items-center gap-4">
+                <span class="text-sm text-gray-500">마지막 업데이트: <span id="last-update">-</span></span>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Total Symbols -->
+            <div class="card bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold opacity-90">전체 심볼 수</h3>
+                    <span class="text-2xl">💎</span>
+                </div>
+                <div class="text-3xl font-bold number-animate" id="total-symbols">-</div>
+                <div class="text-xs opacity-75 mt-2">심볼</div>
+            </div>
+
+            <!-- Total Candles with Auto-Refresh -->
+            <div class="card bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold opacity-90">전체 데이터 건수</h3>
+                    <button id="refresh-count-btn" onclick="refreshCountOnly()" class="text-white hover:bg-white hover:bg-opacity-20 rounded p-1">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="text-3xl font-bold number-animate" id="total-candles">-</div>
+                <div class="text-xs opacity-75 mt-2">캔들</div>
+            </div>
+
+            <!-- Date Range -->
+            <div class="card bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold opacity-90">데이터 기간</h3>
+                    <span class="text-2xl">📅</span>
+                </div>
+                <div class="text-sm font-bold" id="date-range">-</div>
+                <div class="text-xs opacity-75 mt-2">기간</div>
+            </div>
+
+            <!-- Timeframes -->
+            <div class="card bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg p-6 text-white">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold opacity-90">타임프레임</h3>
+                    <span class="text-2xl">⏱️</span>
+                </div>
+                <div class="text-3xl font-bold number-animate" id="total-timeframes">-</div>
+                <div class="text-xs opacity-75 mt-2">종류</div>
+            </div>
+        </div>
+
+        <!-- Distribution Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Year Distribution -->
+            <div class="card bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">년도별 분포</h2>
+                <div style="height: 300px; position: relative;">
+                    <canvas id="yearChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Month Distribution -->
+            <div class="card bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">월별 분포 (최근 12개월)</h2>
+                <div style="height: 300px; position: relative;">
+                    <canvas id="monthChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeframe Distribution -->
+        <div class="card bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">타임프레임별 분포</h2>
+            <div id="timeframe-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <!-- 동적 생성 -->
+            </div>
+        </div>
+
+        <!-- Data Grid -->
+        <div class="card bg-white rounded-lg shadow-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">심볼별 데이터 현황</h2>
+                <div class="flex gap-2">
+                    <input type="text" id="grid-search" placeholder="심볼 검색..." class="px-4 py-2 border border-gray-300 rounded-lg">
+                    <select id="year-filter" class="px-4 py-2 border border-gray-300 rounded-lg">
+                        <option value="">전체 년도</option>
+                    </select>
+                </div>
+            </div>
+            <div class="overflow-x-auto" style="max-height: 600px; overflow-y: auto;">
+                <table class="min-w-full">
+                    <thead class="bg-gray-50 sticky top-0">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="sortGrid('symbol')">
+                                심볼 <span id="sort-symbol">↕</span>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="sortGrid('year')">
+                                년도 <span id="sort-year">↕</span>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                TF별 캔들 수
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="sortGrid('total')">
+                                합계 <span id="sort-total">↕</span>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">액션</th>
+                        </tr>
+                    </thead>
+                    <tbody id="grid-tbody" class="bg-white divide-y divide-gray-200">
+                        <!-- 동적 생성 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Month Detail Modal -->
+    <div id="month-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center">
+        <div class="bg-white rounded-lg p-8 shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-2xl font-bold text-gray-800" id="modal-title">월별 상세</h3>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="modal-content" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <!-- 동적 생성 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let gridData = [];
+        let filteredData = [];
+        let sortColumn = 'symbol';
+        let sortDirection = 'asc';
+        let yearChart = null;
+        let monthChart = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadOverview();
+            loadGridData();
+        });
+
+        function showLoading(message = '데이터 로딩 중...') {
+            document.getElementById('loading-overlay').classList.remove('hidden');
+            document.getElementById('loading-overlay').classList.add('flex');
+            document.getElementById('loading-text').textContent = message;
+            document.getElementById('progress-bar').style.width = '0%';
+            
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) { clearInterval(interval); progress = 90; }
+                document.getElementById('progress-bar').style.width = progress + '%';
+            }, 200);
+            document.getElementById('loading-overlay').dataset.interval = interval;
+        }
+
+        function hideLoading() {
+            document.getElementById('progress-bar').style.width = '100%';
+            const interval = document.getElementById('loading-overlay').dataset.interval;
+            if (interval) clearInterval(parseInt(interval));
+            setTimeout(() => {
+                document.getElementById('loading-overlay').classList.add('hidden');
+                document.getElementById('loading-overlay').classList.remove('flex');
+            }, 300);
+        }
+
+        async function loadOverview() {
+            showLoading('전체 개요 로딩 중...');
+            try {
+                const response = await fetch('/api/overview');
+                const data = await response.json();
+
+                document.getElementById('total-symbols').textContent = data.total_symbols.toLocaleString();
+                document.getElementById('total-candles').textContent = data.total_candles.toLocaleString();
+                document.getElementById('total-timeframes').textContent = data.timeframes.length;
+                
+                const earliest = new Date(data.earliest_date).toLocaleDateString('ko-KR');
+                const latest = new Date(data.latest_date).toLocaleDateString('ko-KR');
+                document.getElementById('date-range').textContent = `${earliest} ~ ${latest}`;
+                document.getElementById('last-update').textContent = new Date(data.timestamp).toLocaleTimeString('ko-KR');
+
+                // Timeframe Grid
+                const tfGrid = document.getElementById('timeframe-grid');
+                tfGrid.innerHTML = data.timeframes.map(tf => `
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <div class="text-2xl font-bold text-blue-600">${tf.tf}</div>
+                        <div class="text-sm text-gray-600 mt-1">${tf.count.toLocaleString()} 캔들</div>
+                        <div class="text-xs text-gray-500">${tf.symbols} 심볼</div>
+                    </div>
+                `).join('');
+
+                // Year Chart
+                renderYearChart(data.year_distribution);
+                // Month Chart
+                renderMonthChart(data.month_distribution);
+
+                // Populate filters
+                const years = [...new Set(data.year_distribution.map(y => y.year))].sort((a, b) => b - a);
+                const yearFilter = document.getElementById('year-filter');
+                yearFilter.innerHTML = '<option value="">전체 년도</option>' + 
+                    years.map(y => `<option value="${y}">${y}년</option>`).join('');
+
+            } catch (error) {
+                console.error('Overview 로드 실패:', error);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function refreshCountOnly() {
+            const btn = document.getElementById('refresh-count-btn');
+            btn.classList.add('animate-spin');
+            try {
+                const response = await fetch('/api/count-only');
+                const data = await response.json();
+                document.getElementById('total-candles').textContent = data.total_candles.toLocaleString();
+                document.getElementById('last-update').textContent = new Date(data.timestamp).toLocaleTimeString('ko-KR');
+            } catch (error) {
+                console.error('Count 갱신 실패:', error);
+            } finally {
+                setTimeout(() => btn.classList.remove('animate-spin'), 500);
+            }
+        }
+
+        async function loadGridData() {
+            showLoading('그리드 데이터 로딩 중...');
+            try {
+                const response = await fetch('/api/grid-data');
+                const result = await response.json();
+                gridData = result.data;
+                filteredData = gridData;
+                renderGrid();
+            } catch (error) {
+                console.error('Grid 로드 실패:', error);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function renderGrid() {
+            const tbody = document.getElementById('grid-tbody');
+            tbody.innerHTML = filteredData.map(row => {
+                // TF별 캔들수 포맷팅
+                const tfOrder = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
+                const tfText = tfOrder
+                    .filter(tf => row.tf_data[tf])
+                    .map(tf => `${tf}: ${row.tf_data[tf].toLocaleString()}`)
+                    .join(' / ');
+                
+                return `
+                    <tr class="grid-row">
+                        <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${row.symbol}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-600">${row.year}</td>
+                        <td class="px-6 py-4 text-gray-600 text-sm">${tfText}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-900 font-semibold">${row.total.toLocaleString()}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <button onclick='showMonthDetail("${row.symbol}", ${row.year})' 
+                                    class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                월별 보기 →
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function sortGrid(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+
+            filteredData.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+                if (typeof valA === 'string') {
+                    valA = valA.toLowerCase();
+                    valB = valB.toLowerCase();
+                }
+                if (sortDirection === 'asc') {
+                    return valA > valB ? 1 : -1;
+                } else {
+                    return valA < valB ? 1 : -1;
+                }
+            });
+
+            ['symbol', 'year', 'total'].forEach(col => {
+                const elem = document.getElementById(`sort-${col}`);
+                if (elem) {
+                    if (col === column) {
+                        elem.textContent = sortDirection === 'asc' ? '↑' : '↓';
+                    } else {
+                        elem.textContent = '↕';
+                    }
+                }
+            });
+
+            renderGrid();
+        }
+
+        document.getElementById('grid-search').addEventListener('input', filterGrid);
+        document.getElementById('year-filter').addEventListener('change', filterGrid);
+
+        function filterGrid() {
+            const search = document.getElementById('grid-search').value.toLowerCase();
+            const yearFilter = document.getElementById('year-filter').value;
+
+            filteredData = gridData.filter(row => {
+                const matchSearch = row.symbol.toLowerCase().includes(search);
+                const matchYear = !yearFilter || row.year == yearFilter;
+                return matchSearch && matchYear;
+            });
+
+            renderGrid();
+        }
+
+        async function showMonthDetail(symbol, year) {
+            showLoading(`${symbol} ${year}년 월별 데이터 로딩 중...`);
+            try {
+                const response = await fetch(`/api/months-detail?symbol=${symbol}&year=${year}`);
+                const data = await response.json();
+
+                document.getElementById('modal-title').textContent = `${symbol} ${year}년 월별 현황`;
+                const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+                
+                document.getElementById('modal-content').innerHTML = data.months.map(m => {
+                    // TF별 캔들수
+                    const tfOrder = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
+                    const tfText = tfOrder
+                        .filter(tf => m.tf_data[tf])
+                        .map(tf => `<div class="text-xs text-gray-500">${tf}: ${m.tf_data[tf].toLocaleString()}</div>`)
+                        .join('');
+                    
+                    return `
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="text-lg font-bold text-gray-800 mb-2">${monthNames[m.month - 1]}</div>
+                            <div class="text-sm font-semibold text-blue-600 mb-2">합계: ${m.total.toLocaleString()}</div>
+                            ${tfText}
+                        </div>
+                    `;
+                }).join('');
+
+                document.getElementById('month-modal').classList.remove('hidden');
+                document.getElementById('month-modal').classList.add('flex');
+            } catch (error) {
+                console.error('Month detail 로드 실패:', error);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('month-modal').classList.add('hidden');
+            document.getElementById('month-modal').classList.remove('flex');
+        }
+
+        function renderYearChart(years) {
+            const ctx = document.getElementById('yearChart');
+            if (yearChart) yearChart.destroy();
+            
+            const maxValue = Math.max(...years.map(y => y.count));
+            const yMax = Math.ceil(maxValue * 1.1 / 100000) * 100000; // 10% 여유 + 반올림
+            
+            yearChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: years.map(y => y.year + '년'),
+                    datasets: [{
+                        label: '캔들 수',
+                        data: years.map(y => y.count),
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: { 
+                        y: { 
+                            beginAtZero: true,
+                            max: yMax,
+                            ticks: {
+                                callback: function(value) {
+                                    return (value / 1000000).toFixed(1) + 'M';
+                                }
+                            }
+                        } 
+                    }
+                }
+            });
+        }
+
+        function renderMonthChart(months) {
+            const ctx = document.getElementById('monthChart');
+            if (monthChart) monthChart.destroy();
+            
+            const maxValue = Math.max(...months.map(m => m.count));
+            const yMax = Math.ceil(maxValue * 1.1 / 10000) * 10000;
+            
+            monthChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months.map(m => m.month).reverse(),
+                    datasets: [{
+                        label: '캔들 수',
+                        data: months.map(m => m.count).reverse(),
+                        backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                        borderColor: 'rgba(34, 197, 94, 1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: { 
+                        y: { 
+                            beginAtZero: true,
+                            max: yMax,
+                            ticks: {
+                                callback: function(value) {
+                                    return (value / 1000).toFixed(0) + 'K';
+                                }
+                            }
+                        } 
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

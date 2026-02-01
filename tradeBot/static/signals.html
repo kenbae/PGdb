@@ -1,0 +1,3856 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signals - Trading Bot</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0b0e11;
+            --bg-secondary: #1e2329;
+            --bg-tertiary: #2b3139;
+            --text-primary: #eaecef;
+            --text-secondary: #848e9c;
+            --text-muted: #5e6673;
+            --border-color: #2b3139;
+            --green: #0ecb81;
+            --green-bg: rgba(14, 203, 129, 0.1);
+            --red: #f6465d;
+            --red-bg: rgba(246, 70, 93, 0.1);
+            --yellow: #f0b90b;
+            --blue: #1e80ff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 12px;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            height: 48px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 24px;
+        }
+        .logo {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--yellow);
+        }
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            padding: 8px 0;
+            transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active {
+            color: var(--text-primary);
+        }
+        .header-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .timezone-badge {
+            background: var(--bg-tertiary);
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Filters */
+        .filters {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .filter-group label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .filter-group select,
+        .filter-group input {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 8px 12px;
+            color: var(--text-primary);
+            font-size: 12px;
+            outline: none;
+            min-width: 120px;
+        }
+        .filter-group select:focus,
+        .filter-group input:focus {
+            border-color: var(--yellow);
+        }
+        .filter-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--yellow);
+            color: #000;
+        }
+        .btn-primary:hover {
+            background: #d4a40a;
+        }
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover {
+            background: #3b424b;
+        }
+        .btn-success {
+            background: var(--green);
+            color: #fff;
+        }
+        .btn-success:hover {
+            background: #0ba86a;
+        }
+        .btn-warning {
+            background: var(--yellow);
+            color: #000;
+        }
+        .btn-warning:hover {
+            background: #d4a40a;
+        }
+
+        /* Row colors for different sources */
+        tr.row-binance {
+            background: rgba(240, 185, 11, 0.15) !important;
+        }
+        tr.row-binance:hover {
+            background: rgba(240, 185, 11, 0.25) !important;
+        }
+        tr.row-matched {
+            background: rgba(30, 128, 255, 0.15) !important;
+        }
+        tr.row-matched:hover {
+            background: rgba(30, 128, 255, 0.25) !important;
+        }
+        tr.row-editable td {
+            cursor: text;
+        }
+        .source-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: 600;
+            margin-left: 4px;
+        }
+        .source-badge.binance {
+            background: var(--yellow);
+            color: #000;
+        }
+        .source-badge.signal {
+            background: var(--blue);
+            color: #fff;
+        }
+        .edit-input {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--yellow);
+            border-radius: 3px;
+            color: var(--text-primary);
+            padding: 4px 6px;
+            font-size: 12px;
+            width: 100%;
+        }
+        .action-btns {
+            display: flex;
+            gap: 4px;
+        }
+        .action-btns button {
+            padding: 4px 8px;
+            font-size: 10px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .action-btns .save-btn {
+            background: var(--green);
+            color: #fff;
+        }
+        .action-btns .cancel-btn {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+
+        /* Stats Cards */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .stat-card {
+            background: var(--bg-secondary);
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 3px solid var(--yellow);
+        }
+        .stat-card .label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .stat-card .value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-align: right;
+        }
+        .stat-card.success { border-left-color: var(--green); }
+        .stat-card.danger { border-left-color: var(--red); }
+        .stat-card.info { border-left-color: var(--blue); }
+
+        /* Analysis Section */
+        .analysis-section {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .analysis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            background: var(--bg-tertiary);
+        }
+        .analysis-header:hover {
+            background: var(--border-color);
+        }
+        .analysis-header h3 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .toggle-icon {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--text-secondary);
+        }
+        .analysis-content {
+            padding: 16px;
+        }
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 900px) {
+            .analysis-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .analysis-card {
+            background: var(--bg-primary);
+            border-radius: 6px;
+            padding: 12px;
+        }
+        .analysis-card h4 {
+            margin: 0 0 12px 0;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .analysis-table {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .analysis-row {
+            display: grid;
+            grid-template-columns: 60px 1fr 60px 60px 70px;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+            align-items: center;
+        }
+        .analysis-row.header {
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border-color);
+        }
+        .analysis-row .bar-cell {
+            position: relative;
+        }
+        .analysis-bar {
+            height: 16px;
+            border-radius: 3px;
+            background: var(--blue);
+            opacity: 0.7;
+        }
+        .analysis-bar.positive {
+            background: var(--green);
+        }
+        .analysis-bar.negative {
+            background: var(--red);
+        }
+        .analysis-loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-secondary);
+        }
+
+        /* Strategy Analysis - 6 column grid for symbol/strategy */
+        .analysis-row.six-col {
+            grid-template-columns: 90px 1fr 50px 50px 55px 70px;
+        }
+        .analysis-row.six-col.header {
+            font-size: 11px;
+        }
+
+        /* Strategy Analysis Filter Buttons */
+        .analysis-filter-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .analysis-filter-btn:hover {
+            background: var(--border-color);
+        }
+        .analysis-filter-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        /* Active Filter Tags */
+        .analysis-filter-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: var(--accent);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+        .analysis-filter-tag .remove {
+            cursor: pointer;
+            opacity: 0.7;
+            font-size: 14px;
+            line-height: 1;
+        }
+        .analysis-filter-tag .remove:hover {
+            opacity: 1;
+        }
+
+        /* Clickable Analysis Rows */
+        .analysis-row.clickable {
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .analysis-row.clickable:hover {
+            background: var(--bg-tertiary);
+        }
+        .analysis-row.clickable.selected {
+            background: rgba(99, 102, 241, 0.15);
+            border-left: 3px solid var(--accent);
+        }
+
+        /* 3 column layout for month/day/hour */
+        @media (max-width: 1200px) {
+            .analysis-grid[style*="repeat(3, 1fr)"] {
+                grid-template-columns: 1fr 1fr !important;
+            }
+        }
+        @media (max-width: 768px) {
+            .analysis-grid[style*="repeat(3, 1fr)"] {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        /* Table Container */
+        .table-container {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th {
+            background: var(--bg-tertiary);
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        tr:hover {
+            background: var(--bg-tertiary);
+            cursor: pointer;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-buy {
+            background: var(--green-bg);
+            color: var(--green);
+        }
+        .badge-sell {
+            background: var(--red-bg);
+            color: var(--red);
+        }
+        .badge-approve {
+            background: rgba(30, 128, 255, 0.1);
+            color: var(--blue);
+        }
+        .badge-reject {
+            background: var(--red-bg);
+            color: var(--red);
+        }
+        .badge-caution {
+            background: rgba(240, 185, 11, 0.1);
+            color: var(--yellow);
+        }
+        .badge-pending {
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+        }
+        .badge-tp1, .badge-tp2 {
+            background: var(--green-bg);
+            color: var(--green);
+        }
+        .badge-sl {
+            background: var(--red-bg);
+            color: var(--red);
+        }
+        .badge-strategy {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            font-size: 11px;
+        }
+
+        /* PnL */
+        .pnl-positive {
+            color: var(--green);
+            font-weight: 600;
+        }
+        .pnl-negative {
+            color: var(--red);
+            font-weight: 600;
+        }
+
+        /* PnL column right align */
+        td.pnl-cell {
+            text-align: right;
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+        }
+        .pagination button {
+            padding: 8px 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .pagination button:hover:not(:disabled) {
+            background: var(--yellow);
+            color: #000;
+            border-color: var(--yellow);
+        }
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .pagination .page-info {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Loading & Empty */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--yellow);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .empty {
+            text-align: center;
+            padding: 60px;
+            color: var(--text-muted);
+        }
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+        }
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 0;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .modal-close:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        .modal-body {
+            padding: 20px;
+        }
+
+        /* Detail Grid */
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        .detail-item {
+            padding: 12px;
+            background: var(--bg-primary);
+            border-radius: 6px;
+        }
+        .detail-item .label {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .detail-item .value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .detail-full {
+            grid-column: 1 / -1;
+        }
+        .detail-full .value {
+            font-size: 13px;
+            font-weight: 400;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3b424b;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 12px 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1001;
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success { border-left: 3px solid var(--green); }
+        .toast.error { border-left: 3px solid var(--red); }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* ========== 모바일 반응형 ========== */
+
+        /* 모바일 메뉴 버튼 */
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        /* 태블릿 (1024px 이하) */
+        @media (max-width: 1024px) {
+            .container {
+                padding: 12px;
+            }
+            .filters {
+                gap: 8px;
+            }
+            .filter-group select,
+            .filter-group input {
+                min-width: 100px;
+            }
+            .stats {
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            }
+            .analysis-row {
+                grid-template-columns: 50px 1fr 50px 50px 60px;
+                font-size: 11px;
+            }
+        }
+
+        /* 모바일 (768px 이하) */
+        @media (max-width: 768px) {
+            /* 헤더 */
+            .header {
+                padding: 0 12px;
+                gap: 12px;
+            }
+            .nav-links {
+                display: none;
+            }
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            /* 컨테이너 */
+            .container {
+                padding: 8px;
+            }
+
+            /* 필터 */
+            .filters {
+                flex-direction: column;
+                gap: 12px;
+                padding: 12px;
+            }
+            .filter-group {
+                width: 100%;
+            }
+            .filter-group select,
+            .filter-group input {
+                width: 100%;
+                min-width: auto;
+            }
+            .filter-actions {
+                width: 100%;
+                margin-left: 0;
+                flex-wrap: wrap;
+            }
+            .filter-actions .btn {
+                flex: 1;
+                min-width: 80px;
+            }
+
+            /* 통계 카드 */
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+            .stat-card {
+                padding: 12px;
+            }
+            .stat-card .value {
+                font-size: 16px;
+            }
+
+            /* 분석 섹션 */
+            .analysis-grid {
+                grid-template-columns: 1fr;
+            }
+            .analysis-row {
+                grid-template-columns: 1fr 1fr;
+                gap: 4px;
+                padding: 8px 0;
+            }
+            .analysis-row.header {
+                display: none;
+            }
+            .analysis-row > *:nth-child(3),
+            .analysis-row > *:nth-child(4),
+            .analysis-row > *:nth-child(5) {
+                display: none;
+            }
+
+            /* 테이블 - 카드 형식 */
+            .table-container {
+                overflow-x: auto;
+            }
+            table {
+                min-width: 800px;
+            }
+            th, td {
+                padding: 8px;
+                font-size: 11px;
+            }
+
+            /* 모달 */
+            .modal-content {
+                width: 95%;
+                margin: 10px;
+                max-height: 90vh;
+            }
+
+            /* 토스트 */
+            .toast {
+                left: 12px;
+                right: 12px;
+                bottom: 12px;
+            }
+        }
+
+        /* 소형 모바일 (480px 이하) */
+        @media (max-width: 480px) {
+            .header {
+                padding: 0 8px;
+            }
+            .logo {
+                font-size: 14px;
+            }
+            .stats {
+                grid-template-columns: 1fr 1fr;
+            }
+            .stat-card {
+                padding: 10px;
+            }
+            .stat-card .label {
+                font-size: 10px;
+            }
+            .stat-card .value {
+                font-size: 14px;
+            }
+            .btn {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+        <div class="logo">TradeBot</div>
+        <nav class="nav-links" id="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="/signals" class="active">Signals</a>
+            <a href="/positions">Positions</a>
+            <a href="/matching">Matching</a>
+            <a href="/paper-trading">Paper Trading</a>
+        </nav>
+        <div class="header-right">
+            <span class="timezone-badge" id="timezone-badge">KST</span>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <label>Symbol</label>
+                <select id="filter-symbol">
+                    <option value="">All</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Type</label>
+                <select id="filter-type">
+                    <option value="">All</option>
+                    <option value="buy">Buy</option>
+                    <option value="sell">Sell</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>AI Decision</label>
+                <select id="filter-ai">
+                    <option value="">All</option>
+                    <option value="approve">Approve</option>
+                    <option value="reject">Reject</option>
+                    <option value="caution">Caution</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Result</label>
+                <select id="filter-status">
+                    <option value="">All</option>
+                    <option value="pending">Pending</option>
+                    <option value="win">Win (TP Hit)</option>
+                    <option value="loss">Loss (SL Hit)</option>
+                    <option value="tp1_hit">TP1 Hit</option>
+                    <option value="tp2_hit">TP2 Hit</option>
+                    <option value="sl_hit">SL Hit</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Source</label>
+                <select id="filter-source">
+                    <option value="">전부</option>
+                    <option value="signal">신호만</option>
+                    <option value="binance">실제만</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>From</label>
+                <input type="date" id="filter-date-from" style="width:130px;">
+            </div>
+
+            <div class="filter-group">
+                <label>To</label>
+                <input type="date" id="filter-date-to" style="width:130px;">
+            </div>
+
+            <div class="filter-actions">
+                <button class="btn btn-primary" onclick="applyFilters()">Search</button>
+                <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
+                <button class="btn btn-success" onclick="openSimulateModal()">Simulate</button>
+                <button class="btn btn-warning" onclick="matchFromOrders()" title="DB 포지션과 신호 매칭">Match from Order</button>
+                <button class="btn" onclick="openCsvUpload()" title="바이낸스 CSV 파일 업로드" style="background:#6c5ce7;color:white;">Upload CSV</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="label" id="stat-total-label">Total Signals</div>
+                <div class="value" id="stat-total">-</div>
+            </div>
+            <div class="stat-card success">
+                <div class="label">Wins</div>
+                <div class="value" id="stat-wins">-</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="label">Losses</div>
+                <div class="value" id="stat-losses">-</div>
+            </div>
+            <div class="stat-card info">
+                <div class="label">Win Rate</div>
+                <div class="value" id="stat-winrate">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Total PnL</div>
+                <div class="value" id="stat-total-pnl">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Avg PnL</div>
+                <div class="value" id="stat-avg-pnl">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Avg R-Multiple</div>
+                <div class="value" id="stat-avg-r">-</div>
+            </div>
+        </div>
+        <!-- Strategy Analysis Section -->
+        <div class="analysis-section" id="strategy-analysis-section" style="margin-bottom: 16px;">
+            <div class="analysis-header" onclick="toggleStrategyAnalysis()">
+                <h3>📊 Strategy Analysis (Top 10)</h3>
+                <span class="toggle-icon" id="strategy-analysis-toggle">+</span>
+            </div>
+            <div class="analysis-content" id="strategy-analysis-content" style="display: none;">
+                <!-- Filter Bar -->
+                <div class="strategy-analysis-filter-bar" style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+                    <div style="display:flex; gap:4px; align-items:center;">
+                        <span style="font-size:12px; color:var(--text-secondary);">소스:</span>
+                        <button class="analysis-filter-btn active" data-filter="source" data-value="" onclick="toggleAnalysisFilter(this)">전체</button>
+                        <button class="analysis-filter-btn" data-filter="source" data-value="signal" onclick="toggleAnalysisFilter(this)">신호만</button>
+                        <button class="analysis-filter-btn" data-filter="source" data-value="real" onclick="toggleAnalysisFilter(this)">실제</button>
+                    </div>
+                    <div style="display:flex; gap:4px; align-items:center; margin-left:12px;">
+                        <span style="font-size:12px; color:var(--text-secondary);">결과:</span>
+                        <button class="analysis-filter-btn active" data-filter="result" data-value="" onclick="toggleAnalysisFilter(this)">전체</button>
+                        <button class="analysis-filter-btn" data-filter="result" data-value="win" onclick="toggleAnalysisFilter(this)">Win</button>
+                        <button class="analysis-filter-btn" data-filter="result" data-value="loss" onclick="toggleAnalysisFilter(this)">Loss</button>
+                    </div>
+                    <div id="active-analysis-filters" style="display:flex; gap:4px; flex-wrap:wrap;"></div>
+                    <button class="btn btn-sm" onclick="clearAnalysisFilters()" style="font-size:11px; padding:3px 8px; display:none;" id="clear-analysis-filters-btn">필터 초기화</button>
+                </div>
+                <!-- Row 1: Symbol Top10 + Strategy -->
+                <div class="analysis-grid" style="margin-bottom: 16px;">
+                    <div class="analysis-card">
+                        <h4>🏆 Symbol Top 10 (신호 수)</h4>
+                        <div class="analysis-table" id="symbol-top10-analysis">
+                            <div class="analysis-loading">Loading...</div>
+                        </div>
+                    </div>
+                    <div class="analysis-card">
+                        <h4>📈 Strategy Performance</h4>
+                        <div class="analysis-table" id="strategy-performance-analysis">
+                            <div class="analysis-loading">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Row 2: Month + Day + Hour -->
+                <div class="analysis-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="analysis-card">
+                        <h4>📅 By Month</h4>
+                        <div class="analysis-table" id="month-analysis">
+                            <div class="analysis-loading">Loading...</div>
+                        </div>
+                    </div>
+                    <div class="analysis-card">
+                        <h4>📆 By Day of Week</h4>
+                        <div class="analysis-table" id="strategy-day-analysis">
+                            <div class="analysis-loading">Loading...</div>
+                        </div>
+                    </div>
+                    <div class="analysis-card">
+                        <h4>⏰ By Hour (KST)</h4>
+                        <div class="analysis-table" id="strategy-hour-analysis">
+                            <div class="analysis-loading">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-container">
+            <div id="loading" class="loading"><div class="spinner"></div> Loading...</div>
+            <div id="empty" class="empty" style="display: none;">
+                <div class="empty-icon">📭</div>
+                <p>No signals found</p>
+            </div>
+            <table id="signals-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Time (KST)</th>
+                        <th>Symbol</th>
+                        <th>Strategy</th>
+                        <th>Type</th>
+                        <th>Entry</th>
+                        <th>Stop Loss</th>
+                        <th>Take Profit</th>
+                        <th>Confidence</th>
+                        <th>R:R</th>
+                        <th>AI Decision</th>
+                        <th>AI Conf.</th>
+                        <th>Result</th>
+                        <th style="text-align:right;">PnL %</th>
+                        <th>R-Multiple</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="signals-tbody">
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination" style="display: none;">
+                <button id="prev-btn" onclick="prevPage()">Prev</button>
+                <span class="page-info" id="page-info">1 / 1</span>
+                <button id="next-btn" onclick="nextPage()">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div class="modal" id="detail-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Signal Details</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Dynamically filled -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Match Orders Modal -->
+    <div class="modal" id="fetch-orders-modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Match Signals with Positions</h2>
+                <button class="modal-close" onclick="closeFetchModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-grid" style="gap: 12px;">
+                    <div class="detail-item">
+                        <div class="label">Start Date</div>
+                        <input type="date" id="fetch-start-date" class="edit-input" style="margin-top:4px;">
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">End Date</div>
+                        <input type="date" id="fetch-end-date" class="edit-input" style="margin-top:4px;">
+                    </div>
+                    <div class="detail-item detail-full" style="margin-top:8px;">
+                        <div class="label">Time Window (hours)</div>
+                        <input type="number" id="match-time-window" class="edit-input" value="2" min="1" max="24" style="margin-top:4px;width:80px;">
+                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">신호와 포지션 시간 차이 허용 범위</span>
+                    </div>
+                    <div class="detail-item detail-full" style="margin-top:12px;">
+                        <button class="btn btn-warning" onclick="executeMatchOrders()" style="width:100%;">
+                            Match from DB
+                        </button>
+                    </div>
+                    <div class="detail-item detail-full" id="match-result" style="display:none;margin-top:8px;">
+                        <div id="match-result-text" style="padding:10px;border-radius:6px;font-size:12px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CSV Upload Modal -->
+    <div class="modal" id="csv-upload-modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h2>Upload Binance CSV</h2>
+                <button class="modal-close" onclick="closeCsvModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-grid" style="gap: 12px;">
+                    <div class="detail-item detail-full">
+                        <div class="label" style="margin-bottom:8px;">바이낸스 선물 거래 내역 CSV 파일</div>
+                        <p style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">
+                            바이낸스 웹 > Futures > Order History > Trade History에서<br>
+                            CSV 다운로드한 파일을 업로드하세요.
+                        </p>
+                        <input type="file" id="csv-file-input" accept=".csv"
+                            style="width:100%;padding:10px;background:var(--bg-tertiary);border:2px dashed var(--border-color);border-radius:8px;color:var(--text-primary);cursor:pointer;">
+                    </div>
+                    <div class="detail-item detail-full" id="csv-preview" style="display:none;margin-top:8px;">
+                        <div class="label">선택된 파일</div>
+                        <div id="csv-file-name" style="margin-top:4px;padding:8px;background:var(--bg-tertiary);border-radius:6px;font-size:12px;"></div>
+                    </div>
+                    <div class="detail-item detail-full" style="margin-top:12px;">
+                        <button class="btn" id="csv-upload-btn" onclick="uploadCsvFile()" style="width:100%;background:#6c5ce7;color:white;" disabled>
+                            Upload & Save to DB
+                        </button>
+                    </div>
+                    <div class="detail-item detail-full" id="csv-result" style="display:none;margin-top:8px;">
+                        <div id="csv-result-text" style="padding:10px;border-radius:6px;font-size:12px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simulate Modal -->
+    <div class="modal" id="simulate-modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>🎯 Run Simulation</h2>
+                <button class="modal-close" onclick="closeSimulateModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-grid" style="gap: 16px;">
+                    <div class="detail-item detail-full">
+                        <div class="label" style="margin-bottom:8px;">Capital ($)</div>
+                        <input type="number" id="sim-capital" value="100" min="10" step="10"
+                            style="width:100%;padding:10px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:14px;">
+                        <p style="font-size:11px;color:var(--text-secondary);margin-top:4px;">시뮬레이션 시작 자본금</p>
+                    </div>
+                    <div class="detail-item detail-full">
+                        <div class="label" style="margin-bottom:8px;">Risk per Trade (%)</div>
+                        <input type="number" id="sim-risk" value="2.0" min="0.5" max="10" step="0.5"
+                            style="width:100%;padding:10px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:14px;">
+                        <p style="font-size:11px;color:var(--text-secondary);margin-top:4px;">거래당 리스크 비율 (0.5% ~ 10%)</p>
+                    </div>
+                    <div class="detail-item detail-full" style="padding:12px;background:var(--bg-tertiary);border-radius:8px;border:1px solid var(--border-color);">
+                        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                            <input type="checkbox" id="sim-update-all" style="width:18px;height:18px;">
+                            <span style="font-size:13px;">모든 신호 재시뮬레이션</span>
+                        </label>
+                        <p style="font-size:11px;color:var(--text-secondary);margin-top:8px;margin-left:28px;">
+                            체크 시: 이미 시뮬레이션된 신호도 다시 계산<br>
+                            미체크 시: pending 상태 신호만 시뮬레이션
+                        </p>
+                    </div>
+                    <div class="detail-item detail-full" style="margin-top:8px;">
+                        <button class="btn btn-success" onclick="runSimulation()" style="width:100%;padding:12px;font-size:14px;">
+                            ▶ Run Simulation
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enter Action Modal -->
+    <div class="modal" id="enter-action-modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h2>진입 기록</h2>
+                <button class="modal-close" onclick="closeEnterModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-grid" style="gap: 12px;">
+                    <div class="detail-item detail-full">
+                        <div class="label">신호 ID</div>
+                        <div id="enter-signal-id" style="margin-top:4px;padding:8px;background:var(--bg-tertiary);border-radius:6px;font-size:12px;color:var(--text-secondary);"></div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">심볼</div>
+                        <input type="text" id="enter-symbol" readonly
+                            style="width:100%;padding:10px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:14px;margin-top:4px;">
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">방향</div>
+                        <select id="enter-side"
+                            style="width:100%;padding:10px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:14px;margin-top:4px;">
+                            <option value="buy">Buy (Long)</option>
+                            <option value="sell">Sell (Short)</option>
+                        </select>
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">진입 가격</div>
+                        <input type="number" id="enter-price" step="0.01"
+                            style="width:100%;padding:10px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:14px;margin-top:4px;">
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">수량</div>
+                        <input type="number" id="enter-quantity" step="0.001"
+                            style="width:100%;padding:10px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:14px;margin-top:4px;">
+                    </div>
+                    <div class="detail-item detail-full">
+                        <div class="label">이유 (선택사항)</div>
+                        <textarea id="enter-reason" rows="3"
+                            style="width:100%;padding:10px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-size:13px;margin-top:4px;resize:vertical;"></textarea>
+                    </div>
+                    <div class="detail-item detail-full" style="margin-top:12px;">
+                        <button class="btn btn-success" onclick="submitEnterAction()" style="width:100%;padding:12px;font-size:14px;">
+                            기록 저장
+                        </button>
+                    </div>
+                    <div class="detail-item detail-full" id="enter-result" style="display:none;margin-top:8px;">
+                        <div id="enter-result-text" style="padding:10px;border-radius:6px;font-size:12px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        const pageSize = 50;
+        let totalCount = 0;
+        let currentFilters = {};
+        let signals = [];           // 현재 로드된 신호 데이터
+        let binanceTrades = [];     // 바이낸스/DB 거래 데이터
+
+        // Initialize
+        async function init() {
+            const totalStart = performance.now();
+            console.log('[Init] Signals 페이지 초기화 시작...');
+
+            // localStorage에서 시뮬레이션 설정 복원
+            loadSimulationSettings();
+
+            let t0 = performance.now();
+            await loadSymbols();
+            console.log(`[Init] loadSymbols: ${(performance.now()-t0).toFixed(0)}ms`);
+
+            t0 = performance.now();
+            await loadSignals();
+            console.log(`[Init] loadSignals: ${(performance.now()-t0).toFixed(0)}ms`);
+
+            t0 = performance.now();
+            await loadStats();
+            console.log(`[Init] loadStats: ${(performance.now()-t0).toFixed(0)}ms`);
+
+            console.log(`[Init] 총 초기화 완료: ${(performance.now()-totalStart).toFixed(0)}ms`);
+        }
+
+        // ============================================================
+        // Simulate Modal
+        // ============================================================
+
+        // localStorage에서 시뮬레이션 설정 로드
+        function loadSimulationSettings() {
+            const saved = localStorage.getItem('tradebot_sim_settings');
+            if (saved) {
+                try {
+                    const settings = JSON.parse(saved);
+                    document.getElementById('sim-capital').value = settings.capital || 100;
+                    document.getElementById('sim-risk').value = settings.risk || 2.0;
+                } catch (e) {
+                    console.error('Failed to load simulation settings:', e);
+                }
+            }
+        }
+
+        // localStorage에 시뮬레이션 설정 저장
+        function saveSimulationSettings() {
+            const settings = {
+                capital: parseFloat(document.getElementById('sim-capital').value) || 100,
+                risk: parseFloat(document.getElementById('sim-risk').value) || 2.0
+            };
+            localStorage.setItem('tradebot_sim_settings', JSON.stringify(settings));
+        }
+
+        // 시뮬레이션 모달 열기
+        function openSimulateModal() {
+            loadSimulationSettings();  // 최신 값 로드
+            document.getElementById('simulate-modal').classList.add('active');
+        }
+
+        // 시뮬레이션 모달 닫기
+        function closeSimulateModal() {
+            document.getElementById('simulate-modal').classList.remove('active');
+        }
+
+        // 모달 외부 클릭 시 닫기
+        document.getElementById('simulate-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeSimulateModal();
+            }
+        });
+
+        // ============================================================
+        // Enter Action Modal
+        // ============================================================
+
+        let currentEnterSignalId = null;
+
+        function showEnterModal(signalId, symbol, signalType) {
+            currentEnterSignalId = signalId;
+            document.getElementById('enter-signal-id').textContent = signalId;
+            document.getElementById('enter-symbol').value = symbol;
+            document.getElementById('enter-side').value = signalType === 'buy' ? 'buy' : 'sell';
+            document.getElementById('enter-price').value = '';
+            document.getElementById('enter-quantity').value = '';
+            document.getElementById('enter-reason').value = '';
+            document.getElementById('enter-result').style.display = 'none';
+            document.getElementById('enter-action-modal').classList.add('active');
+        }
+
+        function closeEnterModal() {
+            document.getElementById('enter-action-modal').classList.remove('active');
+            currentEnterSignalId = null;
+        }
+
+        async function submitEnterAction() {
+            const signalId = currentEnterSignalId;
+            const symbol = document.getElementById('enter-symbol').value;
+            const side = document.getElementById('enter-side').value;
+            const price = parseFloat(document.getElementById('enter-price').value);
+            const quantity = parseFloat(document.getElementById('enter-quantity').value);
+            const reason = document.getElementById('enter-reason').value.trim();
+
+            if (!symbol || !side) {
+                alert('심볼과 방향은 필수입니다.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/actions/enter', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
+                    },
+                    body: JSON.stringify({
+                        signal_id: signalId,
+                        symbol: symbol,
+                        side: side,
+                        price: price || null,
+                        quantity: quantity || null,
+                        reason: reason || null
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    const resultDiv = document.getElementById('enter-result');
+                    const resultText = document.getElementById('enter-result-text');
+                    resultDiv.style.display = 'block';
+                    resultText.style.cssText = 'padding:10px;border-radius:6px;font-size:12px;background:var(--green-bg);color:var(--green);';
+                    resultText.textContent = `✅ 진입 기록 완료: ${result.action_id}`;
+                    
+                    setTimeout(() => {
+                        closeEnterModal();
+                    }, 1500);
+                } else {
+                    alert(`오류: ${result.detail || '진입 기록 실패'}`);
+                }
+            } catch (error) {
+                console.error('진입 기록 실패:', error);
+                alert(`오류: ${error.message}`);
+            }
+        }
+
+        // 모달 외부 클릭 시 닫기
+        document.getElementById('enter-action-modal')?.addEventListener('click', function(e) {
+            if (e.target.id === 'enter-action-modal') {
+                closeEnterModal();
+            }
+        });
+
+        // Load symbol list
+        async function loadSymbols() {
+            const t0 = performance.now();
+            try {
+                const response = await fetch('/api/watched-symbols');
+                console.log(`  [loadSymbols] API 응답: ${(performance.now()-t0).toFixed(0)}ms`);
+
+                const t1 = performance.now();
+                const data = await response.json();
+                console.log(`  [loadSymbols] JSON 파싱: ${(performance.now()-t1).toFixed(0)}ms`);
+
+                const select = document.getElementById('filter-symbol');
+                // watched_list 배열에서 심볼 추출 (또는 symbols 배열 사용)
+                const symbolList = data.watched_list || [];
+                symbolList.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item.symbol;
+                    option.textContent = item.symbol;
+                    select.appendChild(option);
+                });
+                console.log(`  [loadSymbols] 렌더링 완료: ${symbolList.length}개`);
+            } catch (error) {
+                console.error('Failed to load symbols:', error);
+            }
+        }
+
+        // Load signals
+        async function loadSignals() {
+            const funcStart = performance.now();
+            const loading = document.getElementById('loading');
+            const empty = document.getElementById('empty');
+            const table = document.getElementById('signals-table');
+            const pagination = document.getElementById('pagination');
+
+            loading.style.display = 'flex';
+            empty.style.display = 'none';
+            table.style.display = 'none';
+            pagination.style.display = 'none';
+
+            try {
+                const offset = (currentPage - 1) * pageSize;
+                // _source는 클라이언트 전용 필터이므로 API 호출에서 제외
+                const apiFilters = {...currentFilters};
+                delete apiFilters._source;
+
+                const params = new URLSearchParams({
+                    limit: pageSize,
+                    offset: offset,
+                    ...apiFilters
+                });
+
+                const t0 = performance.now();
+                const response = await fetch(`/api/signals/list?${params}`);
+                console.log(`  [loadSignals] API 응답: ${(performance.now()-t0).toFixed(0)}ms`);
+
+                const t1 = performance.now();
+                const data = await response.json();
+                console.log(`  [loadSignals] JSON 파싱: ${(performance.now()-t1).toFixed(0)}ms (${data.signals.length}개)`);
+
+                loading.style.display = 'none';
+
+                // 전역 변수에 저장 (renderMergedView에서 사용)
+                signals = data.signals;
+
+                if (data.signals.length === 0) {
+                    empty.style.display = 'block';
+                } else {
+                    table.style.display = 'table';
+                    pagination.style.display = 'flex';
+
+                    const t2 = performance.now();
+                    renderSignals(data.signals);
+                    console.log(`  [loadSignals] 렌더링: ${(performance.now()-t2).toFixed(0)}ms`);
+
+                    updatePagination(data.count);
+                }
+                console.log(`  [loadSignals] 총: ${(performance.now()-funcStart).toFixed(0)}ms`);
+            } catch (error) {
+                console.error('Failed to load signals:', error);
+                loading.innerHTML = '<span style="color:var(--red);">Failed to load: ' + error.message + '</span>';
+            }
+        }
+
+        // UTC to KST conversion
+        // 서버는 UTC 시간을 반환하지만 timezone 정보 없이 (예: "2026-01-22T03:01:18")
+        // JavaScript는 이를 로컬 시간으로 해석하므로, 명시적으로 UTC로 파싱해야 함
+        function toKST(dateStr) {
+            if (!dateStr) return new Date();
+
+            // timezone 정보가 없으면 UTC로 간주하여 파싱
+            let isoStr = dateStr;
+            if (!dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+                // 마지막 조건: YYYY-MM-DD 형식의 '-'는 제외 (인덱스 10 이후의 - 확인)
+                isoStr = dateStr + 'Z';  // UTC임을 명시
+            }
+
+            return new Date(isoStr);
+        }
+
+        function formatKSTDate(date) {
+            return date.toLocaleDateString('ko-KR');
+        }
+
+        function formatKSTTime(date) {
+            return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function formatKSTFull(date) {
+            return date.toLocaleString('ko-KR');
+        }
+
+        // Render signals
+        function renderSignals(signals) {
+            const tbody = document.getElementById('signals-tbody');
+            tbody.innerHTML = '';
+
+            signals.forEach(signal => {
+                const row = document.createElement('tr');
+                row.onclick = () => showDetail(signal.signal_id);
+                row.dataset.created = signal.created_at;  // 병합 뷰용 타임스탬프
+                row.dataset.signalId = signal.signal_id;
+
+                // 매칭된 신호는 하이라이트
+                if (signal.matched_position_id) {
+                    row.classList.add('row-matched');
+                }
+
+                const createdAt = toKST(signal.created_at);
+                const dateStr = formatKSTDate(createdAt);
+                const timeStr = formatKSTTime(createdAt);
+
+                // 매칭 뱃지
+                const matchBadge = signal.matched_position_id
+                    ? '<span class="source-badge signal match-icon" title="포지션 매칭됨">🔗</span>'
+                    : '';
+
+                row.innerHTML = `
+                    <td style="color:var(--text-secondary);">${dateStr}<br><span style="color:var(--text-muted);">${timeStr}</span>${matchBadge}</td>
+                    <td><strong>${signal.symbol}</strong></td>
+                    <td><span class="badge badge-strategy">${signal.strategy_name || '-'}</span></td>
+                    <td><span class="badge badge-${signal.signal_type}">${signal.signal_type.toUpperCase()}</span></td>
+                    <td>${formatPrice(signal.entry_price)}</td>
+                    <td style="color:var(--red);">${formatPrice(signal.stop_loss)}</td>
+                    <td style="color:var(--green);">${signal.take_profit_1 ? formatPrice(signal.take_profit_1) : '-'}</td>
+                    <td>${signal.confidence ? (signal.confidence * 100).toFixed(1) + '%' : '-'}</td>
+                    <td>${signal.risk_reward ? signal.risk_reward.toFixed(2) : '-'}</td>
+                    <td><span class="badge badge-${signal.ai_decision || 'pending'}">${signal.ai_decision || '-'}</span></td>
+                    <td>${signal.ai_confidence ? (signal.ai_confidence * 100).toFixed(1) + '%' : '-'}</td>
+                    <td>${getStatusBadge(signal.result_status)}</td>
+                    <td class="pnl-cell">${getPnlText(signal.pnl_percent)}</td>
+                    <td>${signal.r_multiple ? signal.r_multiple.toFixed(2) : '-'}</td>
+                    <td>
+                        <div class="action-btns">
+                            <button class="save-btn" onclick="predictTiming('${signal.signal_id}')" title="타이밍 추천" style="font-size:10px;padding:2px 6px;background:var(--blue);">⏱️</button>
+                            <button class="save-btn" onclick="event.stopPropagation(); showEnterModal('${signal.signal_id}', '${signal.symbol}', '${signal.signal_type}')" title="진입 기록" style="font-size:10px;padding:2px 6px;">진입</button>
+                        </div>
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+            });
+        }
+
+        // Status badge
+        function getStatusBadge(status) {
+            if (!status) return '<span class="badge badge-pending">-</span>';
+
+            const badges = {
+                'pending': '<span class="badge badge-pending">Pending</span>',
+                'tp1_hit': '<span class="badge badge-tp1">TP1 Hit</span>',
+                'tp2_hit': '<span class="badge badge-tp2">TP2 Hit</span>',
+                'sl_hit': '<span class="badge badge-sl">SL Hit</span>',
+                'expired': '<span class="badge badge-pending">Expired</span>'
+            };
+
+            return badges[status] || status;
+        }
+
+        // AI decision badge
+        function getAIBadge(decision) {
+            if (!decision) return '<span class="badge badge-pending">-</span>';
+            return `<span class="badge badge-${decision}">${decision}</span>`;
+        }
+
+        // PnL text
+        function getPnlText(pnl) {
+            if (pnl === null || pnl === undefined) return '-';
+            const className = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+            const sign = pnl >= 0 ? '+' : '';
+            return `<span class="${className}">${sign}${Number(pnl).toFixed(2)}%</span>`;
+        }
+
+        // Update pagination
+        function updatePagination(count) {
+            totalCount = count;
+            const totalPages = Math.ceil(count / pageSize);
+
+            document.getElementById('page-info').textContent = `${currentPage} / ${totalPages}`;
+            document.getElementById('prev-btn').disabled = currentPage === 1;
+            document.getElementById('next-btn').disabled = currentPage >= totalPages;
+        }
+
+        // Previous page
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                loadSignals();
+            }
+        }
+
+        // Next page
+        function nextPage() {
+            const totalPages = Math.ceil(totalCount / pageSize);
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadSignals();
+            }
+        }
+
+        // Load stats
+        async function loadStats() {
+            const funcStart = performance.now();
+            try {
+                const params = new URLSearchParams({
+                    days: 30,
+                    ...currentFilters
+                });
+
+                const t0 = performance.now();
+                const response = await fetch(`/api/signals/stats?${params}`);
+                console.log(`  [loadStats] API 응답: ${(performance.now()-t0).toFixed(0)}ms`);
+
+                const t1 = performance.now();
+                const stats = await response.json();
+                console.log(`  [loadStats] JSON 파싱: ${(performance.now()-t1).toFixed(0)}ms`);
+
+                document.getElementById('stat-total').textContent = stats.total_signals || 0;
+                document.getElementById('stat-wins').textContent = stats.wins || 0;
+                document.getElementById('stat-losses').textContent = stats.losses || 0;
+                document.getElementById('stat-winrate').textContent = stats.win_rate ? (stats.win_rate * 100).toFixed(1) + '%' : '0%';
+
+                // Total PnL (금액)
+                const totalPnl = stats.total_pnl || 0;
+                const totalPnlEl = document.getElementById('stat-total-pnl');
+                if (totalPnl >= 0) {
+                    totalPnlEl.innerHTML = `<span class="pnl-positive">+$${Number(totalPnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+                } else {
+                    totalPnlEl.innerHTML = `<span class="pnl-negative">-$${Math.abs(totalPnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+                }
+
+                document.getElementById('stat-avg-pnl').textContent = stats.avg_pnl_percent ? stats.avg_pnl_percent.toFixed(2) + '%' : '-';
+                document.getElementById('stat-avg-r').textContent = stats.avg_r_multiple ? stats.avg_r_multiple.toFixed(2) : '-';
+
+                console.log(`  [loadStats] 총: ${(performance.now()-funcStart).toFixed(0)}ms`);
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        // ============================================================
+        // Strategy Analysis Section
+        // ============================================================
+
+        // Strategy Analysis 필터 상태
+        let strategyAnalysisFilters = {
+            source: '',      // '', 'signal', 'real'
+            result: '',      // '', 'win', 'loss'
+            symbol: null,
+            strategy: null,
+            month: null,
+            day_of_week: null,
+            hour: null
+        };
+
+        // Toggle strategy analysis section
+        function toggleStrategyAnalysis() {
+            const content = document.getElementById('strategy-analysis-content');
+            const toggle = document.getElementById('strategy-analysis-toggle');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                toggle.textContent = '-';
+                loadStrategyAnalysis();
+            } else {
+                content.style.display = 'none';
+                toggle.textContent = '+';
+            }
+        }
+
+        // 소스/결과 필터 토글
+        function toggleAnalysisFilter(btn) {
+            const filter = btn.dataset.filter;
+            const value = btn.dataset.value;
+
+            if (filter === 'source') {
+                // 같은 그룹의 버튼들 비활성화
+                document.querySelectorAll('.analysis-filter-btn[data-filter="source"]').forEach(b => {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                strategyAnalysisFilters.source = value;
+                loadStrategyAnalysis();
+            } else if (filter === 'result') {
+                // 결과 필터 그룹
+                document.querySelectorAll('.analysis-filter-btn[data-filter="result"]').forEach(b => {
+                    b.classList.remove('active');
+                });
+                btn.classList.add('active');
+                strategyAnalysisFilters.result = value;
+                loadStrategyAnalysis();
+            }
+        }
+
+        // 분석 차트 항목 클릭 시 필터 적용
+        function applyAnalysisFilter(type, value) {
+            // 같은 필터를 다시 클릭하면 해제
+            if (strategyAnalysisFilters[type] === value) {
+                strategyAnalysisFilters[type] = null;
+            } else {
+                strategyAnalysisFilters[type] = value;
+            }
+            loadStrategyAnalysis();
+        }
+
+        // 필터 초기화
+        function clearAnalysisFilters() {
+            strategyAnalysisFilters = {
+                source: strategyAnalysisFilters.source,  // 소스 필터는 유지
+                result: strategyAnalysisFilters.result,  // 결과 필터도 유지
+                symbol: null,
+                strategy: null,
+                month: null,
+                day_of_week: null,
+                hour: null
+            };
+            loadStrategyAnalysis();
+        }
+
+        // 활성 필터 태그 렌더링
+        function renderActiveAnalysisFilters() {
+            const container = document.getElementById('active-analysis-filters');
+            const clearBtn = document.getElementById('clear-analysis-filters-btn');
+            const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+            let html = '';
+            let hasFilter = false;
+
+            if (strategyAnalysisFilters.symbol) {
+                html += `<span class="analysis-filter-tag">심볼: ${strategyAnalysisFilters.symbol} <span class="remove" onclick="applyAnalysisFilter('symbol', '${strategyAnalysisFilters.symbol}')">×</span></span>`;
+                hasFilter = true;
+            }
+            if (strategyAnalysisFilters.strategy) {
+                html += `<span class="analysis-filter-tag">전략: ${strategyAnalysisFilters.strategy} <span class="remove" onclick="applyAnalysisFilter('strategy', '${strategyAnalysisFilters.strategy}')">×</span></span>`;
+                hasFilter = true;
+            }
+            if (strategyAnalysisFilters.month) {
+                html += `<span class="analysis-filter-tag">월: ${strategyAnalysisFilters.month} <span class="remove" onclick="applyAnalysisFilter('month', '${strategyAnalysisFilters.month}')">×</span></span>`;
+                hasFilter = true;
+            }
+            if (strategyAnalysisFilters.day_of_week !== null) {
+                html += `<span class="analysis-filter-tag">요일: ${dayNames[strategyAnalysisFilters.day_of_week]} <span class="remove" onclick="applyAnalysisFilter('day_of_week', ${strategyAnalysisFilters.day_of_week})">×</span></span>`;
+                hasFilter = true;
+            }
+            if (strategyAnalysisFilters.hour !== null) {
+                html += `<span class="analysis-filter-tag">시간: ${String(strategyAnalysisFilters.hour).padStart(2, '0')}시 <span class="remove" onclick="applyAnalysisFilter('hour', ${strategyAnalysisFilters.hour})">×</span></span>`;
+                hasFilter = true;
+            }
+
+            container.innerHTML = html;
+            clearBtn.style.display = hasFilter ? 'inline-block' : 'none';
+
+            // 소스/결과 필터 버튼 상태 동기화
+            syncFilterButtons();
+        }
+
+        // 소스/결과 필터 버튼 상태를 strategyAnalysisFilters와 동기화
+        function syncFilterButtons() {
+            // 소스 버튼
+            document.querySelectorAll('.analysis-filter-btn[data-filter="source"]').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.value === strategyAnalysisFilters.source) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // 결과 버튼
+            document.querySelectorAll('.analysis-filter-btn[data-filter="result"]').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.value === strategyAnalysisFilters.result) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        // Load strategy analysis data
+        async function loadStrategyAnalysis() {
+            try {
+                const params = new URLSearchParams({ days: 30, top_k: 10 });
+
+                // 필터 파라미터 추가
+                if (strategyAnalysisFilters.source) params.append('source', strategyAnalysisFilters.source);
+                if (strategyAnalysisFilters.result) params.append('result', strategyAnalysisFilters.result);
+                if (strategyAnalysisFilters.symbol) params.append('symbol', strategyAnalysisFilters.symbol);
+                if (strategyAnalysisFilters.strategy) params.append('strategy', strategyAnalysisFilters.strategy);
+                if (strategyAnalysisFilters.month) params.append('month', strategyAnalysisFilters.month);
+                if (strategyAnalysisFilters.day_of_week !== null) params.append('day_of_week', strategyAnalysisFilters.day_of_week);
+                if (strategyAnalysisFilters.hour !== null) params.append('hour', strategyAnalysisFilters.hour);
+
+                const response = await fetch(`/api/signals/strategy-analysis?${params}`);
+                const data = await response.json();
+
+                // 활성 필터 태그 렌더링
+                renderActiveAnalysisFilters();
+
+                renderSymbolTop10(data.by_symbol || []);
+                renderStrategyPerformance(data.by_strategy || []);
+                renderMonthAnalysis(data.by_month || []);
+                renderStrategyDayAnalysis(data.by_day || []);
+                renderStrategyHourAnalysis(data.by_hour || []);
+
+                // summary 데이터로 stat 카드 업데이트
+                if (data.summary) {
+                    updateStatCardsFromSummary(data.summary);
+                }
+
+                // 하단 테이블도 필터에 맞춰 업데이트
+                syncTableWithAnalysisFilters();
+            } catch (error) {
+                console.error('Failed to load strategy analysis:', error);
+                document.getElementById('symbol-top10-analysis').innerHTML = '<div class="analysis-loading">Failed to load</div>';
+                document.getElementById('strategy-performance-analysis').innerHTML = '<div class="analysis-loading">Failed to load</div>';
+                document.getElementById('month-analysis').innerHTML = '<div class="analysis-loading">Failed to load</div>';
+                document.getElementById('strategy-day-analysis').innerHTML = '<div class="analysis-loading">Failed to load</div>';
+                document.getElementById('strategy-hour-analysis').innerHTML = '<div class="analysis-loading">Failed to load</div>';
+            }
+        }
+
+        // Strategy Analysis summary 데이터로 stat 카드 업데이트
+        function updateStatCardsFromSummary(summary) {
+            // Total 라벨 동적 변경
+            const totalLabel = document.getElementById('stat-total-label');
+            if (totalLabel) {
+                totalLabel.textContent = strategyAnalysisFilters.source === 'real' ? 'Total Positions' : 'Total Signals';
+            }
+
+            // 값 업데이트
+            document.getElementById('stat-total').textContent = summary.total_count || 0;
+            document.getElementById('stat-wins').textContent = summary.total_wins || 0;
+            document.getElementById('stat-losses').textContent = summary.total_losses || 0;
+            document.getElementById('stat-winrate').textContent = (summary.win_rate || 0) + '%';
+
+            // Total PnL
+            const totalPnl = summary.total_pnl || 0;
+            const totalPnlEl = document.getElementById('stat-total-pnl');
+            if (totalPnl >= 0) {
+                totalPnlEl.innerHTML = `<span class="pnl-positive">+$${Number(totalPnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+            } else {
+                totalPnlEl.innerHTML = `<span class="pnl-negative">-$${Math.abs(totalPnl).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+            }
+
+            // Avg PnL
+            document.getElementById('stat-avg-pnl').textContent = summary.avg_pnl_percent ? summary.avg_pnl_percent.toFixed(2) + '%' : '-';
+        }
+
+        // Strategy Analysis 필터를 하단 테이블에 동기화
+        function syncTableWithAnalysisFilters() {
+            // 소스 필터 동기화
+            const sourceSelect = document.getElementById('filter-source');
+            if (sourceSelect) {
+                if (strategyAnalysisFilters.source === 'real') {
+                    sourceSelect.value = 'binance';
+                } else if (strategyAnalysisFilters.source === 'signal') {
+                    sourceSelect.value = 'signal';
+                } else {
+                    sourceSelect.value = '';
+                }
+            }
+
+            // 심볼 필터 동기화
+            const symbolSelect = document.getElementById('filter-symbol');
+            if (symbolSelect && strategyAnalysisFilters.symbol) {
+                // 옵션이 없으면 추가
+                let found = false;
+                for (let opt of symbolSelect.options) {
+                    if (opt.value === strategyAnalysisFilters.symbol) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    const opt = document.createElement('option');
+                    opt.value = strategyAnalysisFilters.symbol;
+                    opt.textContent = strategyAnalysisFilters.symbol;
+                    symbolSelect.appendChild(opt);
+                }
+                symbolSelect.value = strategyAnalysisFilters.symbol;
+            } else if (symbolSelect && !strategyAnalysisFilters.symbol) {
+                symbolSelect.value = '';
+            }
+
+            // 결과 필터 동기화 (Win/Loss)
+            const statusSelect = document.getElementById('filter-status');
+            if (statusSelect) {
+                if (strategyAnalysisFilters.result === 'win') {
+                    statusSelect.value = 'win';
+                } else if (strategyAnalysisFilters.result === 'loss') {
+                    statusSelect.value = 'loss';
+                } else {
+                    statusSelect.value = '';
+                }
+            }
+
+            // 테이블 새로고침 - 실제 거래일 경우 별도 처리
+            if (strategyAnalysisFilters.source === 'real') {
+                // 실제 거래 조회 후 클라이언트 측 필터링
+                fetchBinanceOnlyWithFilter();
+            } else {
+                applyFilters();
+            }
+        }
+
+        // 실제 거래 조회 + Strategy Analysis 필터 적용
+        async function fetchBinanceOnlyWithFilter() {
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            try {
+                const symbol = strategyAnalysisFilters.symbol || '';
+                const params = new URLSearchParams({ limit: 500 });
+                if (symbol) params.append('symbol', symbol);
+                if (dateFrom) params.append('start_date', dateFrom);
+                if (dateTo) params.append('end_date', dateTo);
+
+                const response = await fetch(`/api/positions/list?${params}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'API 오류');
+                }
+
+                if (data.positions && data.positions.length > 0) {
+                    // positions 데이터를 binanceTrades 형식으로 변환
+                    let trades = data.positions.map(pos => ({
+                        trade_id: pos.position_id,
+                        symbol: pos.symbol,
+                        side: pos.side,
+                        price: pos.entry_price,
+                        amount: pos.quantity,
+                        cost: pos.entry_price * pos.quantity,
+                        fee: pos.commission || 0,
+                        realized_pnl: pos.pnl || 0,
+                        timestamp: new Date(pos.open_time + 'Z').getTime(),
+                        datetime: pos.open_time,
+                        source: 'db',
+                        trades: [pos]
+                    }));
+
+                    // Win/Loss 필터 적용 (클라이언트 측)
+                    if (strategyAnalysisFilters.result === 'win') {
+                        trades = trades.filter(t => (t.realized_pnl || 0) > 0);
+                    } else if (strategyAnalysisFilters.result === 'loss') {
+                        trades = trades.filter(t => (t.realized_pnl || 0) < 0);
+                    }
+
+                    binanceTrades = trades;
+                    renderBinanceOnlyView();
+                } else {
+                    binanceTrades = [];
+                    renderBinanceOnlyView();
+                }
+            } catch (error) {
+                console.error('Failed to fetch binance trades with filter:', error);
+                showToast('조회 실패: ' + error.message, 'error');
+            }
+        }
+
+        // Render Symbol Top 10
+        function renderSymbolTop10(data) {
+            const container = document.getElementById('symbol-top10-analysis');
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="analysis-loading">No data</div>';
+                return;
+            }
+
+            const maxCount = Math.max(...data.map(d => d.signal_count || 0), 1);
+            const countLabel = strategyAnalysisFilters.source === 'real' ? 'Positions' : 'Signals';
+
+            let html = `
+                <div class="analysis-row six-col header">
+                    <div>Symbol</div>
+                    <div>${countLabel}</div>
+                    <div>Wins</div>
+                    <div>Loss</div>
+                    <div>Rate</div>
+                    <div style="text-align:right;">PnL</div>
+                </div>
+            `;
+
+            data.forEach((item, idx) => {
+                const pnl = item.total_pnl || 0;
+                const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+                const barWidth = (item.signal_count / maxCount) * 100;
+                const pnlFormatted = Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                const medal = idx < 3 ? ['🥇', '🥈', '🥉'][idx] : `${idx + 1}.`;
+                const isSelected = strategyAnalysisFilters.symbol === item.symbol;
+
+                html += `
+                    <div class="analysis-row six-col clickable ${isSelected ? 'selected' : ''}" onclick="applyAnalysisFilter('symbol', '${item.symbol}')">
+                        <div><strong>${medal} ${item.symbol}</strong></div>
+                        <div class="bar-cell">
+                            <div class="analysis-bar ${pnl >= 0 ? 'positive' : 'negative'}" style="width: ${barWidth}%"></div>
+                            <span style="position:absolute;left:4px;top:0;">${item.signal_count}</span>
+                        </div>
+                        <div style="color:var(--green);">${item.wins || 0}</div>
+                        <div style="color:var(--red);">${item.losses || 0}</div>
+                        <div>${item.win_rate || 0}%</div>
+                        <div class="${pnlClass}" style="text-align:right;">${pnl >= 0 ? '+' : '-'}${pnlFormatted}</div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Render Strategy Performance
+        function renderStrategyPerformance(data) {
+            const container = document.getElementById('strategy-performance-analysis');
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="analysis-loading">No data</div>';
+                return;
+            }
+
+            const maxCount = Math.max(...data.map(d => d.signal_count || 0), 1);
+            const countLabel = strategyAnalysisFilters.source === 'real' ? 'Positions' : 'Signals';
+
+            let html = `
+                <div class="analysis-row six-col header">
+                    <div>Strategy</div>
+                    <div>${countLabel}</div>
+                    <div>Wins</div>
+                    <div>Loss</div>
+                    <div>Rate</div>
+                    <div style="text-align:right;">PnL</div>
+                </div>
+            `;
+
+            data.forEach(item => {
+                const pnl = item.total_pnl || 0;
+                const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+                const barWidth = (item.signal_count / maxCount) * 100;
+                const pnlFormatted = Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                const strategyName = (item.strategy_name || 'unknown').replace(/_/g, ' ');
+                const isSelected = strategyAnalysisFilters.strategy === item.strategy_name;
+
+                html += `
+                    <div class="analysis-row six-col clickable ${isSelected ? 'selected' : ''}" onclick="applyAnalysisFilter('strategy', '${item.strategy_name}')">
+                        <div><strong>${strategyName}</strong></div>
+                        <div class="bar-cell">
+                            <div class="analysis-bar ${pnl >= 0 ? 'positive' : 'negative'}" style="width: ${barWidth}%"></div>
+                            <span style="position:absolute;left:4px;top:0;">${item.signal_count}</span>
+                        </div>
+                        <div style="color:var(--green);">${item.wins || 0}</div>
+                        <div style="color:var(--red);">${item.losses || 0}</div>
+                        <div>${item.win_rate || 0}%</div>
+                        <div class="${pnlClass}" style="text-align:right;">${pnl >= 0 ? '+' : '-'}${pnlFormatted}</div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Render Month Analysis
+        function renderMonthAnalysis(data) {
+            const container = document.getElementById('month-analysis');
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="analysis-loading">No data</div>';
+                return;
+            }
+
+            const maxCount = Math.max(...data.map(d => d.signal_count || 0), 1);
+            const countLabel = strategyAnalysisFilters.source === 'real' ? 'Positions' : 'Signals';
+
+            let html = `
+                <div class="analysis-row header">
+                    <div>Month</div>
+                    <div>${countLabel}</div>
+                    <div>Wins</div>
+                    <div>Rate</div>
+                    <div style="text-align:right;">PnL</div>
+                </div>
+            `;
+
+            data.forEach(item => {
+                const pnl = item.total_pnl || 0;
+                const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+                const barWidth = (item.signal_count / maxCount) * 100;
+                const pnlFormatted = Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                const isSelected = strategyAnalysisFilters.month === item.month;
+
+                html += `
+                    <div class="analysis-row clickable ${isSelected ? 'selected' : ''}" onclick="applyAnalysisFilter('month', '${item.month}')">
+                        <div><strong>${item.month}</strong></div>
+                        <div class="bar-cell">
+                            <div class="analysis-bar ${pnl >= 0 ? 'positive' : 'negative'}" style="width: ${barWidth}%"></div>
+                            <span style="position:absolute;left:4px;top:0;">${item.signal_count}</span>
+                        </div>
+                        <div>${item.wins || 0}</div>
+                        <div>${item.win_rate || 0}%</div>
+                        <div class="${pnlClass}" style="text-align:right;">${pnl >= 0 ? '+' : '-'}${pnlFormatted}</div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Render Strategy Day Analysis
+        function renderStrategyDayAnalysis(data) {
+            const container = document.getElementById('strategy-day-analysis');
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="analysis-loading">No data</div>';
+                return;
+            }
+
+            const maxCount = Math.max(...data.map(d => d.signal_count || 0), 1);
+            const countLabel = strategyAnalysisFilters.source === 'real' ? 'Positions' : 'Signals';
+
+            let html = `
+                <div class="analysis-row header">
+                    <div>Day</div>
+                    <div>${countLabel}</div>
+                    <div>Wins</div>
+                    <div>Rate</div>
+                    <div style="text-align:right;">PnL</div>
+                </div>
+            `;
+
+            data.forEach(item => {
+                const dayName = dayNames[item.day_of_week] || item.day_of_week;
+                const pnl = item.total_pnl || 0;
+                const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+                const barWidth = (item.signal_count / maxCount) * 100;
+                const pnlFormatted = Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                const isSelected = strategyAnalysisFilters.day_of_week === item.day_of_week;
+
+                html += `
+                    <div class="analysis-row clickable ${isSelected ? 'selected' : ''}" onclick="applyAnalysisFilter('day_of_week', ${item.day_of_week})">
+                        <div><strong>${dayName}</strong></div>
+                        <div class="bar-cell">
+                            <div class="analysis-bar ${pnl >= 0 ? 'positive' : 'negative'}" style="width: ${barWidth}%"></div>
+                            <span style="position:absolute;left:4px;top:0;">${item.signal_count}</span>
+                        </div>
+                        <div>${item.wins || 0}</div>
+                        <div>${item.win_rate || 0}%</div>
+                        <div class="${pnlClass}" style="text-align:right;">${pnl >= 0 ? '+' : '-'}${pnlFormatted}</div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Render Strategy Hour Analysis
+        function renderStrategyHourAnalysis(data) {
+            const container = document.getElementById('strategy-hour-analysis');
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="analysis-loading">No data</div>';
+                return;
+            }
+
+            const maxCount = Math.max(...data.map(d => d.signal_count || 0), 1);
+            const countLabel = strategyAnalysisFilters.source === 'real' ? 'Positions' : 'Signals';
+
+            let html = `
+                <div class="analysis-row header">
+                    <div>Hour</div>
+                    <div>${countLabel}</div>
+                    <div>Wins</div>
+                    <div>Rate</div>
+                    <div style="text-align:right;">PnL</div>
+                </div>
+            `;
+
+            // Sort by hour
+            data.sort((a, b) => a.hour - b.hour);
+
+            data.forEach(item => {
+                const hourStr = `${String(item.hour).padStart(2, '0')}:00`;
+                const pnl = item.total_pnl || 0;
+                const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+                const barWidth = (item.signal_count / maxCount) * 100;
+                const pnlFormatted = Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                const isSelected = strategyAnalysisFilters.hour === item.hour;
+
+                html += `
+                    <div class="analysis-row clickable ${isSelected ? 'selected' : ''}" onclick="applyAnalysisFilter('hour', ${item.hour})">
+                        <div><strong>${hourStr}</strong></div>
+                        <div class="bar-cell">
+                            <div class="analysis-bar ${pnl >= 0 ? 'positive' : 'negative'}" style="width: ${barWidth}%"></div>
+                            <span style="position:absolute;left:4px;top:0;">${item.signal_count}</span>
+                        </div>
+                        <div>${item.wins || 0}</div>
+                        <div>${item.win_rate || 0}%</div>
+                        <div class="${pnlClass}" style="text-align:right;">${pnl >= 0 ? '+' : '-'}${pnlFormatted}</div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Apply filters
+        function applyFilters() {
+            currentFilters = {};
+
+            const symbol = document.getElementById('filter-symbol').value;
+            const type = document.getElementById('filter-type').value;
+            const ai = document.getElementById('filter-ai').value;
+            const status = document.getElementById('filter-status').value;
+            const source = document.getElementById('filter-source').value;
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            if (symbol) currentFilters.symbol = symbol;
+            if (type) currentFilters.signal_type = type;
+            if (ai) currentFilters.ai_decision = ai;
+            if (status) currentFilters.result_status = status;
+            if (dateFrom) currentFilters.start_date = dateFrom;
+            if (dateTo) currentFilters.end_date = dateTo;
+
+            // 소스 필터 저장 (클라이언트 측 필터링용)
+            currentFilters._source = source;
+
+            currentPage = 1;
+
+            // Strategy Analysis가 열려있으면 Stats는 거기서 관리
+            const strategyAnalysisOpen = document.getElementById('strategy-analysis-content')?.style.display !== 'none';
+
+            // 소스 필터에 따라 다른 동작
+            if (source === 'binance') {
+                // 실제 거래만 보기: 바이낸스 데이터 조회
+                fetchBinanceOnly();
+            } else if (source === 'signal') {
+                // 신호만 보기: 바이낸스 데이터 초기화
+                binanceTrades = [];
+                loadSignals();
+                if (!strategyAnalysisOpen) loadStats();
+            } else {
+                // 전부 보기: positions 데이터 조회 후 신호와 병합
+                console.log('[applyFilters] 전부 보기 모드 시작');
+                (async () => {
+                    try {
+                        console.log('[applyFilters] fetchPositionsForMerge 호출 전');
+                        await fetchPositionsForMerge();
+                        console.log('[applyFilters] fetchPositionsForMerge 완료, binanceTrades:', binanceTrades.length);
+                        await loadSignals();
+                        console.log('[applyFilters] loadSignals 완료, signals:', signals.length);
+                        // 신호 또는 거래 중 하나라도 있으면 병합 뷰 표시
+                        if (signals.length > 0 || binanceTrades.length > 0) {
+                            renderMergedView();
+                        }
+                    } catch (e) {
+                        console.error('[applyFilters] 전부 보기 에러:', e);
+                    }
+                })();
+                if (!strategyAnalysisOpen) loadStats();
+            }
+        }
+
+        // 실제 거래만 조회 (DB에서)
+        async function fetchBinanceOnly() {
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            try {
+                showToast('DB에서 실제 거래 조회 중...', 'success');
+
+                const symbol = currentFilters.symbol || '';
+                const params = new URLSearchParams({
+                    limit: 500
+                });
+                if (symbol) params.append('symbol', symbol);
+                if (dateFrom) params.append('start_date', dateFrom);
+                if (dateTo) params.append('end_date', dateTo);
+
+                const response = await fetch(`/api/positions/list?${params}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'API 오류');
+                }
+
+                if (data.positions && data.positions.length > 0) {
+                    // positions 데이터를 binanceTrades 형식으로 변환
+                    binanceTrades = data.positions.map(pos => ({
+                        trade_id: pos.position_id,
+                        symbol: pos.symbol,
+                        side: pos.side,
+                        price: pos.entry_price,
+                        amount: pos.quantity,
+                        cost: pos.entry_price * pos.quantity,
+                        fee: pos.commission || 0,
+                        realized_pnl: pos.pnl || 0,
+                        timestamp: new Date(pos.open_time + 'Z').getTime(),
+                        datetime: pos.open_time,
+                        source: 'db',
+                        trades: [pos]  // 원본 데이터 보관
+                    }));
+                    renderBinanceOnlyView();
+                    showToast(`${binanceTrades.length}개 실제 거래 조회`, 'success');
+                } else {
+                    binanceTrades = [];
+                    renderBinanceOnlyView();
+                    showToast('거래 내역이 없습니다', 'error');
+                }
+            } catch (error) {
+                console.error('Failed to fetch binance trades:', error);
+                showToast('조회 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 전부 보기용 positions 데이터 조회 (조용히)
+        async function fetchPositionsForMerge() {
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            try {
+                const symbol = currentFilters.symbol || '';
+                const params = new URLSearchParams({
+                    limit: 500
+                });
+                if (symbol) params.append('symbol', symbol);
+                if (dateFrom) params.append('start_date', dateFrom);
+                if (dateTo) params.append('end_date', dateTo);
+
+                console.log(`[fetchPositionsForMerge] API 호출: /api/positions/list?${params}`);
+                const response = await fetch(`/api/positions/list?${params}`);
+                const data = await response.json();
+                console.log(`[fetchPositionsForMerge] API 응답: ${data.positions?.length || 0}개`);
+                if (data.positions?.length > 0) {
+                    console.log(`[fetchPositionsForMerge] 첫번째: ${data.positions[0].open_time} ${data.positions[0].symbol}`);
+                    // 1000BONKUSDT 찾기
+                    const bonkTrades = data.positions.filter(p => p.symbol === '1000BONKUSDT');
+                    console.log(`[fetchPositionsForMerge] 1000BONKUSDT: ${bonkTrades.length}개`, bonkTrades.length > 0 ? bonkTrades[0].open_time : '없음');
+                }
+
+                if (response.ok && data.positions && data.positions.length > 0) {
+                    // fetchBinanceOnly와 동일하게 개별 거래로 변환
+                    binanceTrades = data.positions.map(pos => {
+                        // open_time이 이미 Z를 포함할 수 있으므로 체크
+                        let openTimeStr = pos.open_time || '';
+                        if (openTimeStr && !openTimeStr.endsWith('Z') && !openTimeStr.includes('+')) {
+                            openTimeStr += 'Z';
+                        }
+                        const timestamp = new Date(openTimeStr).getTime();
+
+                        return {
+                            trade_id: pos.position_id,
+                            symbol: pos.symbol,
+                            side: pos.side,
+                            price: pos.entry_price,
+                            amount: pos.quantity,
+                            cost: (pos.entry_price || 0) * (pos.quantity || 0),
+                            fee: pos.commission || 0,
+                            realized_pnl: pos.pnl || 0,
+                            timestamp: timestamp,
+                            datetime: pos.open_time,
+                            source: 'db',
+                            trades: [pos]
+                        };
+                    });
+                    console.log(`[fetchPositionsForMerge] ${binanceTrades.length}개 로드 완료`);
+                    // 변환 후 1000BONKUSDT 확인
+                    const bonkConverted = binanceTrades.filter(t => t.symbol === '1000BONKUSDT');
+                    console.log(`[fetchPositionsForMerge] 변환 후 1000BONKUSDT: ${bonkConverted.length}개`, bonkConverted.length > 0 ? `timestamp: ${bonkConverted[0].timestamp}, datetime: ${bonkConverted[0].datetime}` : '없음');
+                    // NaN timestamp 체크
+                    const nanTimestamps = binanceTrades.filter(t => isNaN(t.timestamp));
+                    if (nanTimestamps.length > 0) {
+                        console.warn(`[fetchPositionsForMerge] NaN timestamp 발견: ${nanTimestamps.length}개`, nanTimestamps.slice(0, 3).map(t => ({symbol: t.symbol, datetime: t.datetime})));
+                    }
+                } else {
+                    binanceTrades = [];
+                }
+            } catch (error) {
+                console.error('Failed to fetch positions for merge:', error);
+                binanceTrades = [];
+            }
+        }
+
+        // 바이낸스 거래만 표시
+        function renderBinanceOnlyView() {
+            const loading = document.getElementById('loading');
+            const empty = document.getElementById('empty');
+            const table = document.getElementById('signals-table');
+            const pagination = document.getElementById('pagination');
+            const tbody = document.getElementById('signals-tbody');
+
+            loading.style.display = 'none';
+
+            // 날짜 필터 적용
+            let filteredTrades = [...binanceTrades];
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            if (dateFrom) {
+                const fromMs = new Date(dateFrom).getTime();
+                filteredTrades = filteredTrades.filter(t => t.timestamp >= fromMs);
+            }
+            if (dateTo) {
+                const toMs = new Date(dateTo + 'T23:59:59').getTime();
+                filteredTrades = filteredTrades.filter(t => t.timestamp <= toMs);
+            }
+
+            if (filteredTrades.length === 0) {
+                empty.style.display = 'block';
+                table.style.display = 'none';
+                pagination.style.display = 'none';
+                return;
+            }
+
+            empty.style.display = 'none';
+            table.style.display = 'table';
+            pagination.style.display = 'none';  // 바이낸스 전용 모드에서는 페이지네이션 숨김
+
+            tbody.innerHTML = '';
+
+            filteredTrades.forEach(trade => {
+                const row = document.createElement('tr');
+                row.className = 'row-binance';
+                row.dataset.tradeId = trade.trade_id;
+                row.dataset.source = 'binance';
+
+                const tradeTime = toKST(trade.datetime);
+                const dateStr = formatKSTDate(tradeTime);
+                const timeStr = formatKSTTime(tradeTime);
+
+                const pnl = trade.realized_pnl || 0;
+                const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+                const pnlSign = pnl >= 0 ? '+' : '';
+
+                const tradeCount = trade.trades ? trade.trades.length : 1;
+                const countBadge = tradeCount > 1
+                    ? `<span class="source-badge" style="background:var(--bg-tertiary);color:var(--text-secondary);" title="${tradeCount}개 체결 합산">${tradeCount}x</span>`
+                    : '';
+
+                row.innerHTML = `
+                    <td style="color:var(--text-secondary);">
+                        ${dateStr}<br>${timeStr}
+                        <span class="source-badge binance" title="바이낸스 실거래">B</span>
+                        ${countBadge}
+                    </td>
+                    <td><strong>${trade.symbol}</strong></td>
+                    <td><span class="badge badge-${trade.side}">${trade.side.toUpperCase()}</span></td>
+                    <td>${formatPrice(trade.price)}</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td><span class="badge badge-${pnl >= 0 ? 'tp1' : 'sl'}">${pnl >= 0 ? 'Profit' : 'Loss'}</span></td>
+                    <td class="pnl-cell"><span class="${pnlClass}">${pnlSign}$${pnl.toFixed(2)}</span></td>
+                    <td>
+                        <button class="save-btn" onclick="editTrade('${trade.trade_id}')" title="상세보기" style="font-size:10px;padding:2px 6px;">✎</button>
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+            });
+
+            // Strategy Analysis가 열려있으면 Stats는 거기서 관리
+            const strategyAnalysisOpen = document.getElementById('strategy-analysis-content')?.style.display !== 'none';
+            if (!strategyAnalysisOpen) {
+                updateBinanceStats(filteredTrades);
+            }
+        }
+
+        // 바이낸스 거래 통계 업데이트
+        function updateBinanceStats(trades) {
+            const total = trades.length;
+            const wins = trades.filter(t => (t.realized_pnl || 0) > 0).length;
+            const losses = trades.filter(t => (t.realized_pnl || 0) < 0).length;
+            const winRate = total > 0 ? (wins / total) : 0;
+            const totalPnl = trades.reduce((sum, t) => sum + (t.realized_pnl || 0), 0);
+            const avgPnl = total > 0 ? totalPnl / total : 0;
+
+            // Total 라벨 동적 변경
+            const totalLabel = document.getElementById('stat-total-label');
+            if (totalLabel) totalLabel.textContent = 'Total Positions';
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-wins').textContent = wins;
+            document.getElementById('stat-losses').textContent = losses;
+            document.getElementById('stat-winrate').textContent = (winRate * 100).toFixed(1) + '%';
+
+            const totalPnlEl = document.getElementById('stat-total-pnl');
+            if (totalPnl >= 0) {
+                totalPnlEl.innerHTML = `<span class="pnl-positive">+$${totalPnl.toFixed(2)}</span>`;
+            } else {
+                totalPnlEl.innerHTML = `<span class="pnl-negative">-$${Math.abs(totalPnl).toFixed(2)}</span>`;
+            }
+
+            document.getElementById('stat-avg-pnl').textContent = avgPnl >= 0 ? '+$' + avgPnl.toFixed(2) : '-$' + Math.abs(avgPnl).toFixed(2);
+            document.getElementById('stat-avg-r').textContent = '-';
+        }
+
+        // Reset filters
+        function resetFilters() {
+            document.getElementById('filter-symbol').value = '';
+            document.getElementById('filter-type').value = '';
+            document.getElementById('filter-ai').value = '';
+            document.getElementById('filter-status').value = '';
+            document.getElementById('filter-source').value = '';
+            document.getElementById('filter-date-from').value = '';
+            document.getElementById('filter-date-to').value = '';
+
+            currentFilters = {};
+            currentPage = 1;
+            binanceTrades = [];  // 바이낸스 데이터 초기화
+            loadSignals();
+            loadStats();
+        }
+
+        // Show detail
+        async function showDetail(signalId) {
+            try {
+                const response = await fetch(`/api/signals/${signalId}`);
+                const signal = await response.json();
+
+                const modalBody = document.getElementById('modal-body');
+                const createdAt = toKST(signal.created_at);
+                const exitTime = signal.exit_time ? toKST(signal.exit_time) : null;
+
+                modalBody.innerHTML = `
+                    <div class="detail-grid">
+                        <div class="detail-item detail-full">
+                            <div class="label">Signal ID</div>
+                            <div class="value" style="font-size:12px;color:var(--text-muted);">${signal.signal_id}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Strategy</div>
+                            <div class="value">${signal.strategy_name}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Symbol</div>
+                            <div class="value">${signal.symbol}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Timeframe</div>
+                            <div class="value">${signal.timeframe}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Type</div>
+                            <div class="value"><span class="badge badge-${signal.signal_type}">${signal.signal_type.toUpperCase()}</span></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Entry Price</div>
+                            <div class="value">${formatPrice(signal.entry_price)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Stop Loss</div>
+                            <div class="value" style="color:var(--red);">${formatPrice(signal.stop_loss)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Take Profit 1</div>
+                            <div class="value" style="color:var(--green);">${signal.take_profit_1 ? formatPrice(signal.take_profit_1) : '-'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Take Profit 2</div>
+                            <div class="value" style="color:var(--green);">${signal.take_profit_2 ? formatPrice(signal.take_profit_2) : '-'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Confidence</div>
+                            <div class="value">${signal.confidence ? (signal.confidence * 100).toFixed(1) + '%' : '-'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Risk:Reward</div>
+                            <div class="value">${signal.risk_reward ? signal.risk_reward.toFixed(2) : '-'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">AI Decision</div>
+                            <div class="value"><span class="badge badge-${signal.ai_decision || 'pending'}">${signal.ai_decision || '-'}</span></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">AI Confidence</div>
+                            <div class="value">${signal.ai_confidence ? (signal.ai_confidence * 100).toFixed(1) + '%' : '-'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Result Status</div>
+                            <div class="value">${getStatusBadge(signal.result_status)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">PnL</div>
+                            <div class="value">${getPnlText(signal.pnl_percent)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">R-Multiple</div>
+                            <div class="value">${signal.r_multiple ? signal.r_multiple.toFixed(2) : '-'}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Created (KST)</div>
+                            <div class="value" style="font-size:12px;">${formatKSTFull(createdAt)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="label">Exit Time (KST)</div>
+                            <div class="value" style="font-size:12px;">${exitTime ? formatKSTFull(exitTime) : '-'}</div>
+                        </div>
+                        ${signal.ai_reasoning ? `
+                        <div class="detail-item detail-full">
+                            <div class="label">AI Analysis</div>
+                            <div class="value">${signal.ai_reasoning}</div>
+                        </div>
+                        ` : ''}
+                        ${signal.ai_risk_assessment ? `
+                        <div class="detail-item detail-full">
+                            <div class="label">Risk Assessment</div>
+                            <div class="value">${signal.ai_risk_assessment}</div>
+                        </div>
+                        ` : ''}
+                        ${signal.ai_market_context ? `
+                        <div class="detail-item detail-full">
+                            <div class="label">Market Context</div>
+                            <div class="value">${signal.ai_market_context}</div>
+                        </div>
+                        ` : ''}
+                        <div class="detail-item detail-full" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-color);">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                                <div class="label" style="font-size:13px;font-weight:600;">타이밍 추천</div>
+                                <button class="save-btn" onclick="predictTiming('${signal.signal_id}')" style="font-size:11px;padding:4px 8px;">⏱️ 타이밍 예측</button>
+                            </div>
+                            <div id="timing-recommendation-${signal.signal_id}" style="font-size:12px;color:var(--text-secondary);">
+                                <div style="padding:8px;background:var(--bg-tertiary);border-radius:4px;text-align:center;">
+                                    타이밍 예측 버튼을 클릭하세요
+                                </div>
+                            </div>
+                        </div>
+                        <div class="detail-item detail-full" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-color);">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                                <div class="label" style="font-size:13px;font-weight:600;">정책 추천</div>
+                                <button class="save-btn" onclick="recommendPolicy('${signal.signal_id}')" style="font-size:11px;padding:4px 8px;background:var(--blue);">🎯 정책 추천</button>
+                            </div>
+                            <div id="policy-recommendation-${signal.signal_id}" style="font-size:12px;color:var(--text-secondary);">
+                                <div style="padding:8px;background:var(--bg-tertiary);border-radius:4px;text-align:center;">
+                                    정책 추천 버튼을 클릭하세요
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('detail-modal').classList.add('active');
+            } catch (error) {
+                console.error('Failed to load detail:', error);
+                showToast('Failed to load signal details', 'error');
+            }
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('detail-modal').classList.remove('active');
+        }
+
+        // Modal outside click
+        document.getElementById('detail-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // ESC to close modal
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Run simulation
+        async function runSimulation() {
+            const capital = parseFloat(document.getElementById('sim-capital').value);
+            const riskPercent = parseFloat(document.getElementById('sim-risk').value);
+            const updateAll = document.getElementById('sim-update-all').checked;
+
+            if (!capital || capital < 10) {
+                showToast('Capital must be at least $10', 'error');
+                return;
+            }
+
+            if (!riskPercent || riskPercent < 0.5 || riskPercent > 10) {
+                showToast('Risk must be between 0.5% and 10%', 'error');
+                return;
+            }
+
+            // localStorage에 설정 저장
+            saveSimulationSettings();
+
+            // 모달 닫기
+            closeSimulateModal();
+
+            try {
+                const params = new URLSearchParams({
+                    capital: capital,
+                    risk_percent: riskPercent,
+                    update_all: updateAll,
+                    ...currentFilters
+                });
+
+                showToast('Simulation started...', 'info');
+
+                const response = await fetch(`/api/signals/simulate?${params}`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast(`Simulation complete! ${result.updated}/${result.total} signals processed`, 'success');
+                    // 시뮬레이션 후 pending 필터가 선택되어 있으면 리셋 (결과가 바뀌었으므로)
+                    if (currentFilters.result_status === 'pending') {
+                        document.getElementById('filter-status').value = '';
+                        delete currentFilters.result_status;
+                    }
+                    await loadSignals();
+                    await loadStats();
+
+                    // Strategy Analysis가 열려있으면 새로고침
+                    const analysisContent = document.getElementById('strategy-analysis-content');
+                    if (analysisContent && analysisContent.style.display !== 'none') {
+                        loadStrategyAnalysis();
+                    }
+                } else {
+                    showToast(`Simulation failed: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('Simulation failed:', error);
+                showToast('Simulation error: ' + error.message, 'error');
+            }
+        }
+
+        // Format price with appropriate decimal places
+        function formatPrice(price) {
+            if (!price) return '0.000';
+            price = Number(price);
+            if (price >= 1000) return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+            if (price >= 100) return price.toFixed(3);
+            if (price >= 10) return price.toFixed(4);
+            if (price >= 1) return price.toFixed(5);
+            if (price >= 0.1) return price.toFixed(6);
+            if (price >= 0.001) return price.toFixed(7);
+            return price.toFixed(8);
+        }
+
+        // Toast notification
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // ============================================================
+        // Match from Orders (DB 포지션과 신호 매칭)
+        // ============================================================
+
+        let matchedSignals = [];  // 매칭된 신호 데이터
+
+        // 날짜 선택 모달 열기
+        function matchFromOrders() {
+            // 기본값: 최근 7일
+            const today = new Date();
+            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+            document.getElementById('fetch-end-date').value = today.toISOString().split('T')[0];
+            document.getElementById('fetch-start-date').value = weekAgo.toISOString().split('T')[0];
+
+            // 결과 영역 숨기기
+            const resultDiv = document.getElementById('match-result');
+            if (resultDiv) resultDiv.style.display = 'none';
+
+            document.getElementById('fetch-orders-modal').classList.add('active');
+        }
+
+        function closeFetchModal() {
+            document.getElementById('fetch-orders-modal').classList.remove('active');
+        }
+
+        // 모달 외부 클릭 시 닫기
+        document.getElementById('fetch-orders-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeFetchModal();
+        });
+
+        // DB에서 신호와 포지션 매칭 실행
+        async function executeMatchOrders() {
+            const startDate = document.getElementById('fetch-start-date').value;
+            const endDate = document.getElementById('fetch-end-date').value;
+            const timeWindow = document.getElementById('match-time-window').value || 2;
+
+            if (!startDate || !endDate) {
+                showToast('날짜를 선택하세요', 'error');
+                return;
+            }
+
+            if (new Date(startDate) > new Date(endDate)) {
+                showToast('시작일이 종료일보다 늦습니다', 'error');
+                return;
+            }
+
+            showToast('신호-포지션 매칭 중...', 'success');
+
+            try {
+                const symbol = currentFilters.symbol || '';
+                const params = new URLSearchParams({
+                    start_date: startDate,
+                    end_date: endDate,
+                    time_window_hours: timeWindow
+                });
+                if (symbol) params.append('symbol', symbol);
+
+                const response = await fetch(`/api/signals/match-positions?${params}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'API 오류');
+                }
+
+                // 결과 표시
+                const resultDiv = document.getElementById('match-result');
+                const resultText = document.getElementById('match-result-text');
+                resultDiv.style.display = 'block';
+
+                if (data.matched > 0) {
+                    resultText.style.background = 'var(--success)';
+                    resultText.style.color = 'white';
+                    resultText.innerHTML = `
+                        <strong>매칭 완료!</strong><br>
+                        총 신호: ${data.total_signals}개<br>
+                        매칭됨: ${data.matched}개<br>
+                        포지션 검사: ${data.positions_checked}개
+                    `;
+                    showToast(`${data.matched}개 신호 매칭 완료`, 'success');
+
+                    // 테이블 새로고침
+                    await loadSignals();
+                } else {
+                    resultText.style.background = 'var(--warning)';
+                    resultText.style.color = 'white';
+                    resultText.innerHTML = `
+                        매칭된 신호가 없습니다.<br>
+                        총 신호: ${data.total_signals}개<br>
+                        검사한 포지션: ${data.positions_checked || 0}개
+                    `;
+                    showToast(data.message || '매칭된 신호 없음', 'error');
+                }
+            } catch (error) {
+                console.error('Failed to match orders:', error);
+                showToast('매칭 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 레거시 함수들 (기존 코드 호환성 유지)
+
+        // 같은 시간대(5분 이내) + 같은 심볼 + 같은 방향 거래를 그룹화
+        function groupTrades(trades) {
+            if (!trades || trades.length === 0) return [];
+
+            // 시간순 정렬 (최신순)
+            trades.sort((a, b) => b.timestamp - a.timestamp);
+
+            const groups = [];
+            const TIME_WINDOW = 5 * 60 * 1000;  // 5분 (밀리초)
+
+            for (const trade of trades) {
+                // 기존 그룹에 합칠 수 있는지 확인
+                let foundGroup = null;
+                for (const group of groups) {
+                    const timeDiff = Math.abs(group.timestamp - trade.timestamp);
+                    if (group.symbol === trade.symbol &&
+                        group.side === trade.side &&
+                        timeDiff <= TIME_WINDOW) {
+                        foundGroup = group;
+                        break;
+                    }
+                }
+
+                if (foundGroup) {
+                    // 기존 그룹에 합치기
+                    foundGroup.trades.push(trade);
+                    foundGroup.amount += trade.amount;
+                    foundGroup.cost += trade.cost;
+                    foundGroup.fee += trade.fee || 0;
+                    foundGroup.realized_pnl += trade.realized_pnl || 0;
+                    // 평균 가격 재계산 (가중 평균)
+                    foundGroup.price = foundGroup.cost / foundGroup.amount;
+                    // 매칭된 신호 업데이트 (아직 없으면)
+                    if (!foundGroup.matched_signal && trade.matched_signal) {
+                        foundGroup.matched_signal = trade.matched_signal;
+                    }
+                } else {
+                    // 새 그룹 생성
+                    groups.push({
+                        trade_id: trade.trade_id,  // 첫 번째 거래 ID 사용
+                        order_id: trade.order_id,
+                        symbol: trade.symbol,
+                        side: trade.side,
+                        price: trade.price,
+                        amount: trade.amount,
+                        cost: trade.cost,
+                        fee: trade.fee || 0,
+                        fee_currency: trade.fee_currency,
+                        timestamp: trade.timestamp,
+                        datetime: trade.datetime,
+                        realized_pnl: trade.realized_pnl || 0,
+                        matched_signal: trade.matched_signal,
+                        trades: [trade],  // 원본 거래 목록
+                        source: 'binance'
+                    });
+                }
+            }
+
+            return groups;
+        }
+
+        // 신호와 바이낸스 거래를 시간순으로 병합하여 표시
+        async function renderMergedView() {
+            const tbody = document.getElementById('signals-tbody');
+            const table = document.getElementById('signals-table');
+            const loading = document.getElementById('loading');
+            const empty = document.getElementById('empty');
+            const HOUR_MS = 60 * 60 * 1000;  // 1시간 (밀리초)
+
+            // 날짜 필터 적용
+            let filteredBinanceTrades = [...binanceTrades];
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            if (dateFrom) {
+                const fromMs = new Date(dateFrom).getTime();
+                filteredBinanceTrades = filteredBinanceTrades.filter(t => t.timestamp >= fromMs);
+            }
+            if (dateTo) {
+                const toMs = new Date(dateTo + 'T23:59:59').getTime();
+                filteredBinanceTrades = filteredBinanceTrades.filter(t => t.timestamp <= toMs);
+            }
+
+            // 신호 데이터 준비 (signals 전역 변수 사용)
+            const signalsData = signals.map(signal => {
+                const timestamp = toKST(signal.created_at).getTime();
+                return { signal, timestamp, type: 'signal', symbol: signal.symbol };
+            });
+
+            // 바이낸스 거래 데이터 준비
+            const tradesData = filteredBinanceTrades.map(trade => ({
+                trade,
+                timestamp: trade.timestamp,
+                type: 'binance',
+                symbol: trade.symbol
+            }));
+
+            // 신호와 거래 매칭 (동일 심볼, ±1시간 이내)
+            const matchedSignalIds = new Set();
+            const matchedTradeIds = new Set();
+            const mergedItems = [];
+
+            // 디버깅: 데이터 확인
+            console.log('[renderMergedView] signals:', signalsData.length, signalsData.slice(0, 3).map(s => ({symbol: s.symbol, time: new Date(s.timestamp).toISOString()})));
+            console.log('[renderMergedView] trades:', tradesData.length, tradesData.slice(0, 3).map(t => ({symbol: t.symbol, time: new Date(t.timestamp).toISOString()})));
+
+            // 먼저 매칭되는 쌍 찾기
+            signalsData.forEach(signalItem => {
+                // 심볼 정규화 (슬래시 제거)
+                const signalSymbol = signalItem.symbol.replace('/', '');
+
+                const matchingTrade = tradesData.find(tradeItem => {
+                    const tradeSymbol = tradeItem.symbol.replace('/', '');
+                    const timeDiff = Math.abs(signalItem.timestamp - tradeItem.timestamp);
+                    const symbolMatch = signalSymbol === tradeSymbol;
+                    const timeMatch = timeDiff <= HOUR_MS;
+
+                    return !matchedTradeIds.has(tradeItem.trade.trade_id) && symbolMatch && timeMatch;
+                });
+
+                if (matchingTrade) {
+                    // 매칭됨 - 한 줄로 합침
+                    matchedSignalIds.add(signalItem.signal.signal_id);
+                    matchedTradeIds.add(matchingTrade.trade.trade_id);
+                    mergedItems.push({
+                        type: 'merged',
+                        signal: signalItem.signal,
+                        trade: matchingTrade.trade,
+                        timestamp: signalItem.timestamp
+                    });
+                }
+            });
+
+            // 매칭 안 된 신호들
+            signalsData.forEach(signalItem => {
+                if (!matchedSignalIds.has(signalItem.signal.signal_id)) {
+                    mergedItems.push({
+                        type: 'signal_only',
+                        signal: signalItem.signal,
+                        timestamp: signalItem.timestamp
+                    });
+                }
+            });
+
+            // 매칭 안 된 거래들
+            tradesData.forEach(tradeItem => {
+                if (!matchedTradeIds.has(tradeItem.trade.trade_id)) {
+                    mergedItems.push({
+                        type: 'trade_only',
+                        trade: tradeItem.trade,
+                        timestamp: tradeItem.timestamp
+                    });
+                }
+            });
+
+            // 시간순 정렬 (최신순)
+            mergedItems.sort((a, b) => b.timestamp - a.timestamp);
+
+            console.log(`[renderMergedView] 병합 결과: ${mergedItems.length}개 (merged: ${mergedItems.filter(i => i.type === 'merged').length}, signal_only: ${mergedItems.filter(i => i.type === 'signal_only').length}, trade_only: ${mergedItems.filter(i => i.type === 'trade_only').length})`);
+            if (mergedItems.length > 0) {
+                const first = mergedItems[0];
+                console.log(`[renderMergedView] 첫번째: ${first.type}, timestamp: ${new Date(first.timestamp).toISOString()}, symbol: ${first.signal?.symbol || first.trade?.symbol}`);
+                // 1000BONKUSDT 찾기
+                const bonk = mergedItems.find(i => (i.trade?.symbol || i.signal?.symbol) === '1000BONKUSDT');
+                if (bonk) {
+                    const idx = mergedItems.indexOf(bonk);
+                    console.log(`[renderMergedView] 1000BONKUSDT 위치: ${idx}번째, type: ${bonk.type}, timestamp: ${new Date(bonk.timestamp).toISOString()}`);
+                } else {
+                    console.log(`[renderMergedView] 1000BONKUSDT 없음!`);
+                }
+            }
+
+            // 테이블 렌더링
+            loading.style.display = 'none';
+            tbody.innerHTML = '';
+
+            if (mergedItems.length === 0) {
+                empty.style.display = 'block';
+                table.style.display = 'none';
+                return;
+            }
+
+            empty.style.display = 'none';
+            table.style.display = 'table';
+
+            mergedItems.forEach(item => {
+                const row = document.createElement('tr');
+
+                if (item.type === 'merged') {
+                    // 신호 + 거래 합쳐진 행
+                    const signal = item.signal;
+                    const trade = item.trade;
+                    row.className = 'row-matched';
+                    row.dataset.signalId = signal.signal_id;
+                    row.dataset.tradeId = trade.trade_id;
+
+                    const signalTime = toKST(signal.created_at);
+                    const dateStr = formatKSTDate(signalTime);
+                    const timeStr = formatKSTTime(signalTime);
+
+                    const pnl = trade.realized_pnl || 0;
+                    const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+                    const pnlSign = pnl >= 0 ? '+' : '';
+
+                    row.innerHTML = `
+                        <td>
+                            ${dateStr}<br>${timeStr}
+                            <br><span class="source-badge signal" style="background:#1e80ff;">S+B</span>
+                        </td>
+                        <td><strong>${signal.symbol}</strong></td>
+                        <td><span class="badge badge-strategy">${signal.strategy_name || '-'}</span></td>
+                        <td><span class="badge badge-${signal.signal_type}">${signal.signal_type.toUpperCase()}</span></td>
+                        <td>${formatPrice(signal.entry_price)}</td>
+                        <td class="sl-cell">${formatPrice(signal.stop_loss)}</td>
+                        <td class="tp1-cell">${formatPrice(signal.take_profit_1)}</td>
+                        <td>${signal.take_profit_2 ? formatPrice(signal.take_profit_2) : '-'}</td>
+                        <td>${signal.risk_reward ? signal.risk_reward.toFixed(2) : '-'}</td>
+                        <td>${signal.confidence ? (signal.confidence * 100).toFixed(0) + '%' : '-'}</td>
+                        <td>${getAIBadge(signal.ai_decision)}</td>
+                        <td><span class="badge badge-${pnl >= 0 ? 'tp1' : 'sl'}">${pnl >= 0 ? 'Profit' : 'Loss'}</span></td>
+                        <td class="pnl-cell"><span class="${pnlClass}">${pnlSign}$${pnl.toFixed(2)}</span></td>
+                        <td>
+                            <button class="save-btn" onclick="showDetail('${signal.signal_id}')" title="상세보기" style="font-size:10px;padding:2px 6px;">🔍</button>
+                        </td>
+                    `;
+                } else if (item.type === 'signal_only') {
+                    // 신호만 있는 행
+                    const signal = item.signal;
+                    row.dataset.signalId = signal.signal_id;
+                    row.dataset.created = signal.created_at;
+
+                    const signalTime = toKST(signal.created_at);
+                    const dateStr = formatKSTDate(signalTime);
+                    const timeStr = formatKSTTime(signalTime);
+
+                    row.innerHTML = `
+                        <td>
+                            ${dateStr}<br>${timeStr}
+                            <br><span class="source-badge signal">S</span>
+                        </td>
+                        <td><strong>${signal.symbol}</strong></td>
+                        <td><span class="badge badge-strategy">${signal.strategy_name || '-'}</span></td>
+                        <td><span class="badge badge-${signal.signal_type}">${signal.signal_type.toUpperCase()}</span></td>
+                        <td>${formatPrice(signal.entry_price)}</td>
+                        <td class="sl-cell">${formatPrice(signal.stop_loss)}</td>
+                        <td class="tp1-cell">${formatPrice(signal.take_profit_1)}</td>
+                        <td>${signal.take_profit_2 ? formatPrice(signal.take_profit_2) : '-'}</td>
+                        <td>${signal.risk_reward ? signal.risk_reward.toFixed(2) : '-'}</td>
+                        <td>${signal.confidence ? (signal.confidence * 100).toFixed(0) + '%' : '-'}</td>
+                        <td>${getAIBadge(signal.ai_decision)}</td>
+                        <td>${getStatusBadge(signal.result_status)}</td>
+                        <td class="pnl-cell">-</td>
+                        <td>
+                            <button class="save-btn" onclick="showDetail('${signal.signal_id}')" title="상세보기" style="font-size:10px;padding:2px 6px;">🔍</button>
+                        </td>
+                    `;
+                } else {
+                    // 거래만 있는 행
+                    const trade = item.trade;
+                    row.className = 'row-binance';
+                    row.dataset.tradeId = trade.trade_id;
+
+                    const tradeTime = toKST(trade.datetime);
+                    const dateStr = formatKSTDate(tradeTime);
+                    const timeStr = formatKSTTime(tradeTime);
+
+                    const pnl = trade.realized_pnl || 0;
+                    const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+                    const pnlSign = pnl >= 0 ? '+' : '';
+
+                    row.innerHTML = `
+                        <td style="color:var(--text-secondary);">
+                            ${dateStr}<br>${timeStr}
+                            <br><span class="source-badge binance">B</span>
+                        </td>
+                        <td><strong>${trade.symbol}</strong></td>
+                        <td>-</td>
+                        <td><span class="badge badge-${trade.side}">${trade.side.toUpperCase()}</span></td>
+                        <td>${formatPrice(trade.price)}</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td><span class="badge badge-${pnl >= 0 ? 'tp1' : 'sl'}">${pnl >= 0 ? 'Profit' : 'Loss'}</span></td>
+                        <td class="pnl-cell"><span class="${pnlClass}">${pnlSign}$${pnl.toFixed(2)}</span></td>
+                        <td>
+                            <button class="save-btn" onclick="editTrade('${trade.trade_id}')" title="상세보기" style="font-size:10px;padding:2px 6px;">✎</button>
+                        </td>
+                    `;
+                }
+
+                tbody.appendChild(row);
+            });
+        }
+
+        // 거래 편집 모달
+        let editingTrade = null;
+
+        function editTrade(tradeId) {
+            const trade = binanceTrades.find(t => t.trade_id === tradeId);
+            if (!trade) return;
+
+            editingTrade = trade;
+
+            // 그룹 내 개별 거래 목록 생성
+            const tradeCount = trade.trades ? trade.trades.length : 1;
+            let tradesListHtml = '';
+            if (tradeCount > 1) {
+                tradesListHtml = `
+                    <div class="detail-item detail-full" style="margin-top:16px;">
+                        <div class="label">체결 내역 (${tradeCount}건)</div>
+                        <div class="value" style="margin-top:8px;">
+                            <table style="width:100%;font-size:12px;border-collapse:collapse;">
+                                <thead>
+                                    <tr style="border-bottom:1px solid var(--border-color);color:var(--text-muted);">
+                                        <th style="padding:4px;text-align:left;">시간</th>
+                                        <th style="padding:4px;text-align:right;">가격</th>
+                                        <th style="padding:4px;text-align:right;">수량</th>
+                                        <th style="padding:4px;text-align:right;">PnL</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${trade.trades.map(t => {
+                                        const time = toKST(t.datetime);
+                                        const pnl = t.realized_pnl || 0;
+                                        return `
+                                            <tr style="border-bottom:1px solid var(--border-color);">
+                                                <td style="padding:4px;">${formatKSTTime(time)}</td>
+                                                <td style="padding:4px;text-align:right;">${formatPrice(t.price)}</td>
+                                                <td style="padding:4px;text-align:right;">${t.amount.toFixed(5)}</td>
+                                                <td style="padding:4px;text-align:right;" class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(3)}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const modalBody = document.getElementById('modal-body');
+            modalBody.innerHTML = `
+                <div class="detail-grid">
+                    <div class="detail-item detail-full">
+                        <div class="label">Trade ID ${tradeCount > 1 ? `(${tradeCount}건 그룹)` : ''}</div>
+                        <div class="value" style="font-size:12px;color:var(--text-muted);">${trade.trade_id}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">Symbol</div>
+                        <div class="value">${trade.symbol}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">Side</div>
+                        <div class="value"><span class="badge badge-${trade.side}">${trade.side.toUpperCase()}</span></div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">평균 가격</div>
+                        <div class="value">${formatPrice(trade.price)}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">총 수량</div>
+                        <div class="value">${trade.amount.toFixed(5)}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">총 거래액</div>
+                        <div class="value">$${trade.cost.toFixed(2)}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">총 수수료</div>
+                        <div class="value">$${trade.fee.toFixed(4)} ${trade.fee_currency || ''}</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="label">총 실현 손익</div>
+                        <div class="value ${trade.realized_pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${trade.realized_pnl >= 0 ? '+' : ''}$${trade.realized_pnl.toFixed(3)}</div>
+                    </div>
+                    ${tradesListHtml}
+                    <div class="detail-item detail-full" style="margin-top:16px;">
+                        <div class="label">신호 연결 (선택)</div>
+                        <select id="edit-signal-link" class="edit-input" style="margin-top:8px;">
+                            <option value="">연결 없음</option>
+                            ${trade.matched_signal ? `<option value="${trade.matched_signal.signal_id}" selected>${trade.matched_signal.signal_id} (자동 매칭)</option>` : ''}
+                        </select>
+                    </div>
+                    <div class="detail-item detail-full">
+                        <div class="label">메모</div>
+                        <textarea id="edit-notes" class="edit-input" style="margin-top:8px;min-height:60px;resize:vertical;" placeholder="메모를 입력하세요...">${trade.notes || ''}</textarea>
+                    </div>
+                    <div class="detail-item detail-full" style="margin-top:16px;">
+                        <button class="btn btn-success" onclick="saveTrade()" style="width:100%;">저장</button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('detail-modal').classList.add('active');
+        }
+
+        async function saveTrade() {
+            if (!editingTrade) return;
+
+            const signalLink = document.getElementById('edit-signal-link').value;
+            const notes = document.getElementById('edit-notes').value;
+
+            try {
+                if (signalLink) {
+                    // 신호에 연결
+                    const response = await fetch('/api/signals/link-trade', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            signal_id: signalLink,
+                            trade_id: editingTrade.trade_id,
+                            exit_price: editingTrade.price,
+                            pnl: editingTrade.realized_pnl,
+                            notes: notes
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (result.success) {
+                        showToast('신호에 연결되었습니다', 'success');
+                    } else {
+                        throw new Error(result.detail || '연결 실패');
+                    }
+                } else {
+                    // 메모만 로컬에 저장 (바이낸스 거래는 수정 불가)
+                    editingTrade.notes = notes;
+                    showToast('메모가 저장되었습니다', 'success');
+                }
+
+                closeModal();
+            } catch (error) {
+                showToast('저장 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 신호에 거래 연결
+        async function linkToSignal(tradeId, signalId) {
+            const trade = binanceTrades.find(t => t.trade_id === tradeId);
+            if (!trade) return;
+
+            if (!confirm(`이 거래를 신호 ${signalId}에 연결하시겠습니까?\n\n이 작업은 신호의 결과를 실제 거래 데이터로 업데이트합니다.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/signals/link-trade', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        signal_id: signalId,
+                        trade_id: tradeId,
+                        exit_price: trade.price,
+                        pnl: trade.realized_pnl,
+                        pnl_percent: (trade.realized_pnl / trade.cost) * 100,
+                        notes: `바이낸스 거래 연결: ${trade.trade_id}`
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showToast('신호에 연결 완료!', 'success');
+                    // 신호 목록 새로고침
+                    await loadSignals();
+                } else {
+                    throw new Error(result.detail || '연결 실패');
+                }
+            } catch (error) {
+                showToast('연결 실패: ' + error.message, 'error');
+            }
+        }
+
+        // ============================================
+        // CSV Upload Functions
+        // ============================================
+
+        function openCsvUpload() {
+            document.getElementById('csv-file-input').value = '';
+            document.getElementById('csv-preview').style.display = 'none';
+            document.getElementById('csv-result').style.display = 'none';
+            document.getElementById('csv-upload-btn').disabled = true;
+            document.getElementById('csv-upload-modal').classList.add('active');
+        }
+
+        function closeCsvModal() {
+            document.getElementById('csv-upload-modal').classList.remove('active');
+        }
+
+        // 모달 외부 클릭 시 닫기
+        document.getElementById('csv-upload-modal')?.addEventListener('click', function(e) {
+            if (e.target === this) closeCsvModal();
+        });
+
+        // 파일 선택 시 미리보기 업데이트
+        document.getElementById('csv-file-input')?.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('csv-file-name').textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                document.getElementById('csv-preview').style.display = 'block';
+                document.getElementById('csv-upload-btn').disabled = false;
+                document.getElementById('csv-result').style.display = 'none';
+            } else {
+                document.getElementById('csv-preview').style.display = 'none';
+                document.getElementById('csv-upload-btn').disabled = true;
+            }
+        });
+
+        async function uploadCsvFile() {
+            const fileInput = document.getElementById('csv-file-input');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showToast('파일을 선택하세요', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('csv-upload-btn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = 'Uploading...';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/positions/upload-csv', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                const resultDiv = document.getElementById('csv-result');
+                const resultText = document.getElementById('csv-result-text');
+
+                if (response.ok) {
+                    resultText.innerHTML = `
+                        <div style="color:var(--success-color);">
+                            <strong>업로드 성공!</strong><br>
+                            파싱된 거래: ${result.parsed_trades}건<br>
+                            저장된 포지션: ${result.saved}건<br>
+                            스킵: ${result.skipped}건
+                        </div>
+                    `;
+                    resultText.style.background = 'rgba(0, 200, 83, 0.1)';
+                    showToast(`${result.saved}개 포지션 저장 완료`, 'success');
+
+                    // 필터를 "실제만"으로 변경하고 데이터 새로고침
+                    setTimeout(() => {
+                        closeCsvModal();
+                        document.getElementById('filter-source').value = 'binance';
+                        applyFilters();
+                    }, 1500);
+                } else {
+                    resultText.innerHTML = `<div style="color:var(--danger-color);">오류: ${result.detail || '업로드 실패'}</div>`;
+                    resultText.style.background = 'rgba(255, 71, 87, 0.1)';
+                    showToast('업로드 실패: ' + (result.detail || '오류 발생'), 'error');
+                }
+
+                resultDiv.style.display = 'block';
+
+            } catch (error) {
+                console.error('CSV upload error:', error);
+                showToast('업로드 실패: ' + error.message, 'error');
+
+                const resultDiv = document.getElementById('csv-result');
+                const resultText = document.getElementById('csv-result-text');
+                resultText.innerHTML = `<div style="color:var(--danger-color);">오류: ${error.message}</div>`;
+                resultText.style.background = 'rgba(255, 71, 87, 0.1)';
+                resultDiv.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        // 타이밍 예측
+        async function predictTiming(signalId) {
+            const recommendationDiv = document.getElementById(`timing-recommendation-${signalId}`);
+            if (!recommendationDiv) {
+                // 모달이 아닌 경우 별도 모달 표시
+                await showTimingModal(signalId);
+                return;
+            }
+
+            recommendationDiv.innerHTML = '<div style="padding:8px;text-align:center;color:var(--text-secondary);">예측 중...</div>';
+
+            try {
+                const authToken = localStorage.getItem('auth_token') || '';
+                const response = await fetch(`/api/timing/predict?signal_id=${signalId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    const rec = result.recommendations;
+                    const enterTiming = rec.enter_timing;
+                    const exitTiming = rec.exit_timing;
+                    const marketState = result.market_state || {};
+
+                    let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+                    
+                    // 진입 타이밍
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--green);">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">진입 타이밍</div>';
+                    html += `<div style="font-size:16px;font-weight:600;color:var(--text-primary);">${enterTiming.recommended_minutes.toFixed(1)}분 후</div>`;
+                    html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">신뢰도: ${(enterTiming.confidence * 100).toFixed(0)}%</div>`;
+                    html += `<div style="font-size:10px;color:var(--text-muted);">출처: ${enterTiming.source === 'state_pattern' ? '시장 패턴' : enterTiming.source === 'global_stats' ? '전체 통계' : '기본값'}</div>`;
+                    html += '</div>';
+
+                    // 청산 타이밍
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--blue);">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">청산 타이밍</div>';
+                    html += `<div style="font-size:16px;font-weight:600;color:var(--text-primary);">${exitTiming.recommended_minutes.toFixed(1)}분 후</div>`;
+                    html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">신뢰도: ${(exitTiming.confidence * 100).toFixed(0)}%</div>`;
+                    html += `<div style="font-size:10px;color:var(--text-muted);">출처: ${exitTiming.source === 'state_pattern' ? '시장 패턴' : exitTiming.source === 'global_stats' ? '전체 통계' : '기본값'}</div>`;
+                    html += '</div>';
+
+                    html += '</div>';
+
+                    // 진입 여부 판단
+                    html += '<div style="margin-top:12px;padding:12px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid ' + (rec.should_enter ? 'var(--green)' : 'var(--red)') + ';">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">진입 추천</div>';
+                    html += `<div style="font-size:14px;font-weight:600;color:${rec.should_enter ? 'var(--green)' : 'var(--red)'};">${rec.should_enter ? '✅ 진입 추천' : '❌ 진입 비추천'}</div>`;
+                    html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">신뢰도: ${(rec.confidence * 100).toFixed(0)}%</div>`;
+                    if (rec.market_key) {
+                        html += `<div style="font-size:10px;color:var(--text-muted);">시장 상태: ${rec.market_key}</div>`;
+                    }
+                    html += '</div>';
+
+                    // 시장 상태 정보
+                    if (marketState.trend || marketState.volatility || marketState.rsi_status) {
+                        html += '<div style="margin-top:12px;padding:8px;background:var(--bg-primary);border-radius:4px;font-size:11px;color:var(--text-secondary);">';
+                        html += `트렌드: ${marketState.trend || '-'} | 변동성: ${marketState.volatility || '-'} | RSI: ${marketState.rsi_status || '-'}`;
+                        html += '</div>';
+                    }
+
+                    recommendationDiv.innerHTML = html;
+                } else {
+                    recommendationDiv.innerHTML = `<div style="padding:8px;background:var(--red-bg);border-radius:4px;color:var(--red);text-align:center;">${result.message || '예측 실패'}</div>`;
+                }
+            } catch (error) {
+                console.error('타이밍 예측 실패:', error);
+                recommendationDiv.innerHTML = `<div style="padding:8px;background:var(--red-bg);border-radius:4px;color:var(--red);text-align:center;">예측 실패: ${error.message}</div>`;
+            }
+        }
+
+        // 타이밍 추천 모달 표시 (테이블에서 직접 호출 시)
+        async function showTimingModal(signalId) {
+            // 간단한 모달 생성
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.id = 'timing-modal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;';
+            
+            const content = document.createElement('div');
+            content.style.cssText = 'background:var(--bg-secondary);border-radius:8px;padding:24px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;';
+            
+            content.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <h3 style="font-size:16px;font-weight:600;color:var(--text-primary);">타이밍 추천</h3>
+                    <button onclick="document.getElementById('timing-modal').remove()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;">&times;</button>
+                </div>
+                <div id="timing-modal-content" style="font-size:12px;color:var(--text-secondary);">
+                    예측 중...
+                </div>
+            `;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+            
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+
+            // 예측 실행
+            try {
+                const authToken = localStorage.getItem('auth_token') || '';
+                const response = await fetch(`/api/timing/predict?signal_id=${signalId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+                const modalContent = document.getElementById('timing-modal-content');
+
+                if (response.ok && result.success) {
+                    const rec = result.recommendations;
+                    const enterTiming = rec.enter_timing;
+                    const exitTiming = rec.exit_timing;
+                    const marketState = result.market_state || {};
+
+                    let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">';
+                    
+                    // 진입 타이밍
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--green);">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">진입 타이밍</div>';
+                    html += `<div style="font-size:18px;font-weight:600;color:var(--text-primary);">${enterTiming.recommended_minutes.toFixed(1)}분 후</div>`;
+                    html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">신뢰도: ${(enterTiming.confidence * 100).toFixed(0)}%</div>`;
+                    html += '</div>';
+
+                    // 청산 타이밍
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--blue);">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">청산 타이밍</div>';
+                    html += `<div style="font-size:18px;font-weight:600;color:var(--text-primary);">${exitTiming.recommended_minutes.toFixed(1)}분 후</div>`;
+                    html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">신뢰도: ${(exitTiming.confidence * 100).toFixed(0)}%</div>`;
+                    html += '</div>';
+
+                    html += '</div>';
+
+                    // 진입 여부 판단
+                    html += '<div style="margin-bottom:12px;padding:12px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid ' + (rec.should_enter ? 'var(--green)' : 'var(--red)') + ';">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">진입 추천</div>';
+                    html += `<div style="font-size:16px;font-weight:600;color:${rec.should_enter ? 'var(--green)' : 'var(--red)'};">${rec.should_enter ? '✅ 진입 추천' : '❌ 진입 비추천'}</div>`;
+                    html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">신뢰도: ${(rec.confidence * 100).toFixed(0)}%</div>`;
+                    if (rec.market_key) {
+                        html += `<div style="font-size:10px;color:var(--text-muted);">시장 상태: ${rec.market_key}</div>`;
+                    }
+                    html += '</div>';
+
+                    // 시장 상태 정보
+                    if (marketState.trend || marketState.volatility || marketState.rsi_status) {
+                        html += '<div style="padding:8px;background:var(--bg-primary);border-radius:4px;font-size:11px;color:var(--text-secondary);">';
+                        html += `<div><strong>트렌드:</strong> ${marketState.trend || '-'}</div>`;
+                        html += `<div><strong>변동성:</strong> ${marketState.volatility || '-'}</div>`;
+                        html += `<div><strong>RSI 상태:</strong> ${marketState.rsi_status || '-'}</div>`;
+                        html += '</div>';
+                    }
+
+                    modalContent.innerHTML = html;
+                } else {
+                    modalContent.innerHTML = `<div style="padding:12px;background:var(--red-bg);border-radius:4px;color:var(--red);text-align:center;">${result.message || '예측 실패'}</div>`;
+                }
+            } catch (error) {
+                console.error('타이밍 예측 실패:', error);
+                const modalContent = document.getElementById('timing-modal-content');
+                modalContent.innerHTML = `<div style="padding:12px;background:var(--red-bg);border-radius:4px;color:var(--red);text-align:center;">예측 실패: ${error.message}</div>`;
+            }
+        }
+
+        // 정책 추천
+        async function recommendPolicy(signalId) {
+            const recommendationDiv = document.getElementById(`policy-recommendation-${signalId}`);
+            if (!recommendationDiv) {
+                // 모달이 아닌 경우 별도 모달 표시
+                await showPolicyModal(signalId);
+                return;
+            }
+
+            recommendationDiv.innerHTML = '<div style="padding:8px;text-align:center;color:var(--text-secondary);">추천 중...</div>';
+
+            try {
+                const authToken = localStorage.getItem('auth_token') || '';
+                const response = await fetch(`/api/policy/recommend?signal_id=${signalId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    const policy = result.policy;
+                    const parameters = result.parameters || {};
+
+                    let html = '<div style="display:grid;gap:12px;">';
+                    
+                    // 진입 여부 판단
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid ' + (policy.should_enter ? 'var(--green)' : 'var(--red)') + ';">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">진입 추천</div>';
+                    html += `<div style="font-size:16px;font-weight:600;color:${policy.should_enter ? 'var(--green)' : 'var(--red)'};">${policy.should_enter ? '✅ 진입 추천' : '❌ 진입 비추천'}</div>`;
+                    html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">신뢰도: ${(policy.confidence * 100).toFixed(0)}%</div>`;
+                    html += `<div style="font-size:10px;color:var(--text-muted);">등급: ${policy.recommendation}</div>`;
+                    html += '</div>';
+
+                    // 정책 상세
+                    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+                    
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">진입 타이밍</div>';
+                    html += `<div style="font-size:14px;font-weight:600;color:var(--text-primary);">${policy.enter_timing_minutes.toFixed(1)}분 후</div>`;
+                    html += '</div>';
+
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">청산 타이밍</div>';
+                    html += `<div style="font-size:14px;font-weight:600;color:var(--text-primary);">${policy.exit_timing_minutes.toFixed(1)}분 후</div>`;
+                    html += '</div>';
+
+                    html += '</div>';
+
+                    // 가격 조정 및 리스크 리워드
+                    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">';
+                    
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">가격 조정</div>';
+                    html += `<div style="font-size:14px;font-weight:600;color:var(--text-primary);">${policy.price_adjustment_percent >= 0 ? '+' : ''}${policy.price_adjustment_percent.toFixed(2)}%</div>`;
+                    html += '</div>';
+
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">권장 리스크:리워드</div>';
+                    html += `<div style="font-size:14px;font-weight:600;color:var(--text-primary);">1:${policy.risk_reward.toFixed(2)}</div>`;
+                    html += '</div>';
+
+                    html += '</div>';
+
+                    // 추천 이유
+                    if (policy.reasoning) {
+                        html += '<div style="margin-top:12px;padding:12px;background:var(--bg-primary);border-radius:6px;font-size:11px;color:var(--text-secondary);">';
+                        html += `<div><strong>추천 이유:</strong> ${policy.reasoning}</div>`;
+                        if (policy.win_rate !== undefined) {
+                            html += `<div style="margin-top:4px;">승률: ${policy.win_rate.toFixed(1)}% | 평균 수익: ${policy.avg_pnl_percent?.toFixed(2) || 0}%</div>`;
+                        }
+                        html += '</div>';
+                    }
+
+                    // 파라미터 추천
+                    if (parameters.rsi_range) {
+                        html += '<div style="margin-top:12px;padding:12px;background:var(--bg-primary);border-radius:6px;font-size:11px;color:var(--text-secondary);">';
+                        html += '<div style="font-weight:600;margin-bottom:4px;">권장 파라미터</div>';
+                        html += `<div>RSI 범위: ${parameters.rsi_range.min?.toFixed(1) || '-'} ~ ${parameters.rsi_range.max?.toFixed(1) || '-'} (평균: ${parameters.rsi_range.avg?.toFixed(1) || '-'})</div>`;
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                    recommendationDiv.innerHTML = html;
+                } else {
+                    recommendationDiv.innerHTML = `<div style="padding:8px;background:var(--red-bg);border-radius:4px;color:var(--red);text-align:center;">${result.message || '추천 실패'}</div>`;
+                }
+            } catch (error) {
+                console.error('정책 추천 실패:', error);
+                recommendationDiv.innerHTML = `<div style="padding:8px;background:var(--red-bg);border-radius:4px;color:var(--red);text-align:center;">추천 실패: ${error.message}</div>`;
+            }
+        }
+
+        // 정책 추천 모달 표시 (테이블에서 직접 호출 시)
+        async function showPolicyModal(signalId) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.id = 'policy-modal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;';
+            
+            const content = document.createElement('div');
+            content.style.cssText = 'background:var(--bg-secondary);border-radius:8px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;';
+            
+            content.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <h3 style="font-size:16px;font-weight:600;color:var(--text-primary);">정책 추천</h3>
+                    <button onclick="document.getElementById('policy-modal').remove()" style="background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;">&times;</button>
+                </div>
+                <div id="policy-modal-content" style="font-size:12px;color:var(--text-secondary);">
+                    추천 중...
+                </div>
+            `;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+            
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+
+            // 추천 실행
+            try {
+                const authToken = localStorage.getItem('auth_token') || '';
+                const response = await fetch(`/api/policy/recommend?signal_id=${signalId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+                const modalContent = document.getElementById('policy-modal-content');
+
+                if (response.ok && result.success) {
+                    const policy = result.policy;
+                    const parameters = result.parameters || {};
+
+                    let html = '<div style="display:grid;gap:16px;">';
+                    
+                    // 진입 여부 판단
+                    html += '<div style="padding:16px;background:var(--bg-tertiary);border-radius:6px;border-left:4px solid ' + (policy.should_enter ? 'var(--green)' : 'var(--red)') + ';">';
+                    html += '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">진입 추천</div>';
+                    html += `<div style="font-size:20px;font-weight:600;color:${policy.should_enter ? 'var(--green)' : 'var(--red)'};">${policy.should_enter ? '✅ 진입 추천' : '❌ 진입 비추천'}</div>`;
+                    html += `<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">신뢰도: ${(policy.confidence * 100).toFixed(0)}% | 등급: ${policy.recommendation}</div>`;
+                    html += '</div>';
+
+                    // 정책 상세
+                    html += '<div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:12px;">';
+                    
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">진입 타이밍</div>';
+                    html += `<div style="font-size:18px;font-weight:600;color:var(--text-primary);">${policy.enter_timing_minutes.toFixed(1)}분 후</div>`;
+                    html += '</div>';
+
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">청산 타이밍</div>';
+                    html += `<div style="font-size:18px;font-weight:600;color:var(--text-primary);">${policy.exit_timing_minutes.toFixed(1)}분 후</div>`;
+                    html += '</div>';
+
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">가격 조정</div>';
+                    html += `<div style="font-size:18px;font-weight:600;color:var(--text-primary);">${policy.price_adjustment_percent >= 0 ? '+' : ''}${policy.price_adjustment_percent.toFixed(2)}%</div>`;
+                    html += '</div>';
+
+                    html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                    html += '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">권장 리스크:리워드</div>';
+                    html += `<div style="font-size:18px;font-weight:600;color:var(--text-primary);">1:${policy.risk_reward.toFixed(2)}</div>`;
+                    html += '</div>';
+
+                    html += '</div>';
+
+                    // 추천 이유
+                    if (policy.reasoning) {
+                        html += '<div style="padding:12px;background:var(--bg-primary);border-radius:6px;font-size:12px;color:var(--text-secondary);">';
+                        html += `<div style="font-weight:600;margin-bottom:4px;color:var(--text-primary);">추천 이유</div>`;
+                        html += `<div>${policy.reasoning}</div>`;
+                        if (policy.win_rate !== undefined) {
+                            html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border-color);">`;
+                            html += `승률: ${policy.win_rate.toFixed(1)}% | 평균 수익: ${policy.avg_pnl_percent?.toFixed(2) || 0}%`;
+                            html += `</div>`;
+                        }
+                        html += '</div>';
+                    }
+
+                    // 파라미터 추천
+                    if (parameters.rsi_range) {
+                        html += '<div style="padding:12px;background:var(--bg-primary);border-radius:6px;font-size:12px;color:var(--text-secondary);">';
+                        html += '<div style="font-weight:600;margin-bottom:4px;color:var(--text-primary);">권장 파라미터</div>';
+                        html += `<div>RSI 범위: ${parameters.rsi_range.min?.toFixed(1) || '-'} ~ ${parameters.rsi_range.max?.toFixed(1) || '-'}</div>`;
+                        if (parameters.rsi_range.avg) {
+                            html += `<div style="margin-top:4px;">평균 RSI: ${parameters.rsi_range.avg.toFixed(1)}</div>`;
+                        }
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                    modalContent.innerHTML = html;
+                } else {
+                    modalContent.innerHTML = `<div style="padding:12px;background:var(--red-bg);border-radius:4px;color:var(--red);text-align:center;">${result.message || '추천 실패'}</div>`;
+                }
+            } catch (error) {
+                console.error('정책 추천 실패:', error);
+                const modalContent = document.getElementById('policy-modal-content');
+                modalContent.innerHTML = `<div style="padding:12px;background:var(--red-bg);border-radius:4px;color:var(--red);text-align:center;">추천 실패: ${error.message}</div>`;
+            }
+        }
+
+        // Initialize
+        init();
+
+        // 모바일 메뉴 토글
+        function toggleMobileMenu() {
+            const nav = document.getElementById('nav-links');
+            if (nav.style.display === 'flex') {
+                nav.style.display = 'none';
+            } else {
+                nav.style.cssText = 'display:flex;flex-direction:column;position:absolute;top:48px;left:0;right:0;background:var(--bg-secondary);padding:12px;border-bottom:1px solid var(--border-color);z-index:999;';
+            }
+        }
+    </script>
+</body>
+</html>

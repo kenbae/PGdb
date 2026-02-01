@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modular Crypto Trading Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <style>
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        .widget-card { 
+            background: white; 
+            border-radius: 12px; 
+            padding: 20px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            position: relative;
+            cursor: move;
+        }
+        .widget-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .widget-card.sortable-ghost {
+            opacity: 0.4;
+        }
+        .widget-metric { 
+            font-size: 2.5rem; 
+            font-weight: bold; 
+            margin-top: 8px;
+        }
+        .widget-label { 
+            color: #6B7280; 
+            font-size: 0.875rem; 
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .widget-icon {
+            font-size: 2rem;
+        }
+        .widget-remove {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #EF4444;
+            color: white;
+            border-radius: 50%;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .widget-card:hover .widget-remove {
+            opacity: 1;
+        }
+        .widget-remove:hover {
+            background: #DC2626;
+        }
+        .add-widget-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .add-widget-btn:hover {
+            transform: scale(1.05);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .widget-catalog-item {
+            padding: 15px;
+            border: 2px solid #E5E7EB;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 10px;
+        }
+        .widget-catalog-item:hover {
+            border-color: #3B82F6;
+            background: #EBF8FF;
+        }
+        .color-blue { color: #3B82F6; }
+        .color-green { color: #10B981; }
+        .color-purple { color: #8B5CF6; }
+        .color-orange { color: #F59E0B; }
+        .color-indigo { color: #6366F1; }
+        .color-yellow { color: #FCD34D; }
+        .color-red { color: #EF4444; }
+        .color-pink { color: #EC4899; }
+        .symbol-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background-color 0.15s;
+            font-size: 0.875rem;
+        }
+        .symbol-item:hover {
+            background-color: #EBF8FF;
+        }
+        .symbol-item.selected {
+            background-color: #3B82F6;
+            color: white;
+            font-weight: 600;
+        }
+        .sort-icon {
+            font-size: 0.75rem;
+            color: #9CA3AF;
+            margin-left: 4px;
+        }
+        .sort-icon.active {
+            color: #3B82F6;
+        }
+        th.cursor-pointer:hover .sort-icon {
+            color: #6B7280;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .badge-long {
+            background: #DCFCE7;
+            color: #166534;
+        }
+        .badge-short {
+            background: #FEE2E2;
+            color: #991B1B;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-800">📊 모듈식 대시보드</h1>
+                    <p class="text-gray-600 mt-2">위젯을 추가/제거하고 드래그하여 배치하세요</p>
+                </div>
+                <button onclick="openWidgetModal()" class="add-widget-btn">
+                    ➕ 위젯 추가
+                </button>
+            </div>
+        </div>
+
+        <!-- 위젯 그리드 -->
+        <div id="widgets-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- 위젯이 여기에 동적으로 추가됩니다 -->
+        </div>
+
+        <!-- 기존 차트 및 테이블 섹션은 그대로 유지 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="widget-card" style="cursor: default;">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">결과 분포</h2>
+                <canvas id="resultChart"></canvas>
+            </div>
+            <div class="widget-card" style="cursor: default;">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">일별 누적 수익</h2>
+                <canvas id="profitChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 필터 및 검색 -->
+        <div class="widget-card mb-6" style="cursor: default;">
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="relative">
+                    <label class="text-sm font-medium text-gray-700 mr-2">심볼 필터:</label>
+                    <div class="relative inline-block">
+                        <input 
+                            type="text" 
+                            id="symbol-search" 
+                            placeholder="심볼 검색..."
+                            class="border border-gray-300 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+                            autocomplete="off"
+                        />
+                        <button 
+                            id="symbol-dropdown-btn"
+                            onclick="toggleSymbolDropdown()"
+                            class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        >
+                            ▼
+                        </button>
+                        <div 
+                            id="symbol-dropdown" 
+                            class="hidden absolute z-50 mt-1 w-48 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+                            style="scrollbar-width: thin; scrollbar-color: #CBD5E0 #F7FAFC;"
+                        >
+                            <div class="sticky top-0 bg-gray-50 px-3 py-2 border-b flex justify-between items-center">
+                                <button 
+                                    onclick="selectAllSymbols()"
+                                    class="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                >
+                                    전체 보기
+                                </button>
+                                <button 
+                                    onclick="toggleSymbolSort()"
+                                    class="text-xs text-gray-600 hover:text-gray-800 font-medium"
+                                    id="symbol-sort-btn"
+                                >
+                                    A→Z
+                                </button>
+                            </div>
+                            <div id="symbol-list" class="py-1">
+                                <!-- 심볼 목록 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-700 mr-2">표시 개수:</label>
+                    <select id="limit-filter" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="20">20개</option>
+                        <option value="50">50개</option>
+                        <option value="100">100개</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-700 mr-2">정렬:</label>
+                    <select id="sort-select" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="handleSortChange()">
+                        <option value="time-desc">최신순 (시간 ↓)</option>
+                        <option value="time-asc">오래된 순 (시간 ↑)</option>
+                        <option value="r_multiple-desc">R-Multiple 높은 순</option>
+                        <option value="r_multiple-asc">R-Multiple 낮은 순</option>
+                        <option value="score-desc">점수 높은 순</option>
+                        <option value="score-asc">점수 낮은 순</option>
+                    </select>
+                </div>
+            </div>
+            <!-- 선택된 심볼 표시 -->
+            <div id="selected-symbol-badge" class="mt-3 hidden">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                    <span id="selected-symbol-text"></span>
+                    <button onclick="clearSymbolFilter()" class="ml-2 text-blue-600 hover:text-blue-800 font-bold">
+                        ×
+                    </button>
+                </span>
+            </div>
+        </div>
+
+        <div class="widget-card" style="cursor: default;">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">최근 신호 (<span id="signal-count">0</span>개)</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onclick="sortTable('time')">
+                                시간 <span id="sort-icon-time" class="sort-icon">⇅</span>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">심볼</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">TF</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">방향</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">진입가</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">결과</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onclick="sortTable('r_multiple')">
+                                R-Multiple <span id="sort-icon-r_multiple" class="sort-icon">⇅</span>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onclick="sortTable('score')">
+                                점수 <span id="sort-icon-score" class="sort-icon">⇅</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="signals-body">
+                        <tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">로딩 중...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 위젯 추가 모달 -->
+    <div id="widgetModal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">위젯 추가</h2>
+                <button onclick="closeWidgetModal()" class="text-2xl text-gray-500 hover:text-gray-700">&times;</button>
+            </div>
+            <div id="widget-catalog">
+                <!-- 사용 가능한 위젯 목록 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let activeWidgets = [];
+        let availableWidgets = [];
+        let sortableInstance = null;
+        
+        // 테이블 관련 변수
+        let currentSignalsData = [];
+        let currentSortColumn = 'time';
+        let currentSortOrder = 'desc';
+        let allSymbols = [];
+        let filteredSymbols = [];
+        let symbolSortOrder = 'asc';
+        let selectedSymbol = '';
+
+        // 로컬 스토리지에서 위젯 설정 로드
+        function loadWidgetConfig() {
+            const saved = localStorage.getItem('dashboard_widgets');
+            if (saved) {
+                activeWidgets = JSON.parse(saved);
+            } else {
+                // 기본 위젯
+                activeWidgets = [
+                    'total_signals',
+                    'win_rate',
+                    'avg_r_multiple',
+                    'total_profit'
+                ];
+            }
+        }
+
+        // 위젯 설정 저장
+        function saveWidgetConfig() {
+            localStorage.setItem('dashboard_widgets', JSON.stringify(activeWidgets));
+        }
+
+        // 사용 가능한 위젯 목록 로드
+        async function loadAvailableWidgets() {
+            try {
+                const response = await fetch('/api/widgets/available');
+                availableWidgets = await response.json();
+                renderWidgetCatalog();
+            } catch (error) {
+                console.error('위젯 목록 로드 실패:', error);
+            }
+        }
+
+        // 위젯 카탈로그 렌더링
+        function renderWidgetCatalog() {
+            const catalog = document.getElementById('widget-catalog');
+            catalog.innerHTML = '';
+
+            availableWidgets.forEach(widget => {
+                const isActive = activeWidgets.includes(widget.id);
+                const item = document.createElement('div');
+                item.className = 'widget-catalog-item' + (isActive ? ' opacity-50' : '');
+                item.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">${widget.icon}</span>
+                            <div>
+                                <div class="font-semibold text-gray-800">${widget.name}</div>
+                                <div class="text-sm text-gray-500">${widget.id}</div>
+                            </div>
+                        </div>
+                        ${isActive ? 
+                            '<span class="text-sm text-gray-500">이미 추가됨</span>' : 
+                            '<button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">추가</button>'
+                        }
+                    </div>
+                `;
+
+                if (!isActive) {
+                    item.onclick = () => addWidget(widget.id);
+                }
+
+                catalog.appendChild(item);
+            });
+        }
+
+        // 위젯 추가
+        function addWidget(widgetId) {
+            if (!activeWidgets.includes(widgetId)) {
+                activeWidgets.push(widgetId);
+                saveWidgetConfig();
+                renderWidgets();
+                renderWidgetCatalog();
+                closeWidgetModal();
+            }
+        }
+
+        // 위젯 제거
+        function removeWidget(widgetId) {
+            activeWidgets = activeWidgets.filter(id => id !== widgetId);
+            saveWidgetConfig();
+            renderWidgets();
+            renderWidgetCatalog();
+        }
+
+        // 위젯 렌더링
+        async function renderWidgets() {
+            const container = document.getElementById('widgets-container');
+            container.innerHTML = '';
+
+            if (activeWidgets.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">위젯을 추가해주세요</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/widgets/batch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(activeWidgets)
+                });
+                const widgets = await response.json();
+
+                widgets.forEach(widget => {
+                    if (widget.error) {
+                        console.error(`위젯 로드 실패 (${widget.id}):`, widget.error);
+                        return;
+                    }
+
+                    const card = document.createElement('div');
+                    card.className = 'widget-card';
+                    card.dataset.widgetId = widget.id;
+
+                    const data = widget.data;
+                    const colorClass = `color-${widget.color}`;
+
+                    card.innerHTML = `
+                        <div class="widget-remove" onclick="removeWidget('${widget.id}')">×</div>
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <div class="widget-label">${widget.name}</div>
+                                <div class="widget-metric ${colorClass}">
+                                    ${data.value}${data.label || ''}
+                                </div>
+                                ${data.subtitle ? `<div class="text-sm text-gray-500 mt-1">${data.subtitle}</div>` : ''}
+                            </div>
+                            <div class="widget-icon">${widget.icon}</div>
+                        </div>
+                        ${data.trend ? `
+                            <div class="mt-2 text-sm ${data.trend === 'up' ? 'text-green-600' : 'text-red-600'}">
+                                ${data.trend === 'up' ? '↑' : '↓'} ${data.change || ''}
+                            </div>
+                        ` : ''}
+                    `;
+
+                    container.appendChild(card);
+                });
+
+                // Sortable 재초기화
+                initSortable();
+
+            } catch (error) {
+                console.error('위젯 렌더링 실패:', error);
+            }
+        }
+
+        // 드래그 앤 드롭 초기화
+        function initSortable() {
+            const container = document.getElementById('widgets-container');
+            if (sortableInstance) {
+                sortableInstance.destroy();
+            }
+
+            sortableInstance = Sortable.create(container, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: function(evt) {
+                    // 순서 변경 저장
+                    const newOrder = [];
+                    container.querySelectorAll('.widget-card').forEach(card => {
+                        newOrder.push(card.dataset.widgetId);
+                    });
+                    activeWidgets = newOrder;
+                    saveWidgetConfig();
+                }
+            });
+        }
+
+        // 모달 열기/닫기
+        function openWidgetModal() {
+            document.getElementById('widgetModal').style.display = 'block';
+        }
+
+        function closeWidgetModal() {
+            document.getElementById('widgetModal').style.display = 'none';
+        }
+
+        // 차트 및 테이블 로드 (기존 코드 유지)
+        async function loadCharts() {
+            // 결과 분포 차트
+            const distResponse = await fetch('/api/result-distribution');
+            const distData = await distResponse.json();
+            
+            new Chart(document.getElementById('resultChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: distData.labels,
+                    datasets: [{
+                        data: distData.values,
+                        backgroundColor: ['#10B981', '#3B82F6', '#EF4444', '#9CA3AF']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+
+            // 일별 수익 차트
+            const profitResponse = await fetch('/api/daily-profit?days=30');
+            const profitData = await profitResponse.json();
+            
+            new Chart(document.getElementById('profitChart'), {
+                type: 'line',
+                data: {
+                    labels: profitData.dates,
+                    datasets: [{
+                        label: '누적 수익',
+                        data: profitData.cumulative_profit,
+                        borderColor: '#8B5CF6',
+                        fill: true,
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        async function loadSignals() {
+            try {
+                const limit = document.getElementById('limit-filter').value;
+                let url = `/api/recent-signals?limit=${limit}`;
+                
+                if (selectedSymbol) {
+                    url += `&symbol=${selectedSymbol}`;
+                }
+                
+                const response = await fetch(url);
+                const signals = await response.json();
+                
+                currentSignalsData = signals;
+                document.getElementById('signal-count').textContent = signals.length;
+                
+                sortAndDisplaySignals();
+            } catch (error) {
+                console.error('신호 로드 오류:', error);
+                const tbody = document.getElementById('signals-body');
+                tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-red-500">데이터 로드 실패</td></tr>';
+            }
+        }
+        
+        // 정렬 및 표시
+        function sortAndDisplaySignals() {
+            if (currentSignalsData.length === 0) {
+                document.getElementById('signals-body').innerHTML = 
+                    '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">신호가 없습니다.</td></tr>';
+                return;
+            }
+
+            const sortedData = [...currentSignalsData].sort((a, b) => {
+                let valA, valB;
+
+                switch(currentSortColumn) {
+                    case 'time':
+                        valA = new Date(a.open_time).getTime();
+                        valB = new Date(b.open_time).getTime();
+                        break;
+                    case 'r_multiple':
+                        valA = a.r_multiple !== null ? a.r_multiple : -999;
+                        valB = b.r_multiple !== null ? b.r_multiple : -999;
+                        break;
+                    case 'score':
+                        valA = a.score !== null ? a.score : -999;
+                        valB = b.score !== null ? b.score : -999;
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (currentSortOrder === 'asc') {
+                    return valA - valB;
+                } else {
+                    return valB - valA;
+                }
+            });
+
+            displaySignalsTable(sortedData);
+            updateSortIcons();
+        }
+        
+        // 테이블 표시
+        function displaySignalsTable(signals) {
+            const tbody = document.getElementById('signals-body');
+            tbody.innerHTML = '';
+            
+            const resultColors = {
+                'tp2': 'text-green-600 font-semibold',
+                'tp1': 'text-blue-600 font-medium',
+                'sl': 'text-red-600 font-medium',
+                'none': 'text-gray-500'
+            };
+            
+            const resultEmojis = {
+                'tp2': '✓✓',
+                'tp1': '✓',
+                'sl': '✗',
+                'none': '○'
+            };
+            
+            signals.forEach(s => {
+                const row = tbody.insertRow();
+                const rMultipleColor = s.r_multiple > 0 ? 'text-green-600 font-semibold' : 
+                                      s.r_multiple < 0 ? 'text-red-600 font-semibold' : 
+                                      'text-gray-500';
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 text-sm whitespace-nowrap">${new Date(s.open_time).toLocaleString('ko-KR')}</td>
+                    <td class="px-6 py-4 text-sm font-semibold whitespace-nowrap text-blue-600 hover:text-blue-800 cursor-pointer" onclick="selectSymbolFromTable('${s.symbol}')">${s.symbol}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap">${s.tf || '-'}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap">
+                        <span class="badge ${s.direction === 'long' ? 'badge-long' : 'badge-short'}">
+                            ${s.direction ? s.direction.toUpperCase() : '-'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap font-mono">${s.entry ? s.entry.toFixed(2) : '-'}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap ${resultColors[s.result] || ''}">
+                        ${resultEmojis[s.result] || ''} ${s.result ? s.result.toUpperCase() : '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap ${rMultipleColor} font-mono">${s.r_multiple !== null ? s.r_multiple.toFixed(2) + 'R' : '-'}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap">${s.score || '-'}</td>
+                `;
+            });
+        }
+        
+        // 정렬 함수
+        function sortTable(column) {
+            if (currentSortColumn === column) {
+                currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                currentSortOrder = 'desc';
+            }
+            sortAndDisplaySignals();
+        }
+        
+        function handleSortChange() {
+            const sortSelect = document.getElementById('sort-select');
+            const [column, order] = sortSelect.value.split('-');
+            currentSortColumn = column;
+            currentSortOrder = order;
+            sortAndDisplaySignals();
+        }
+        
+        function updateSortIcons() {
+            ['time', 'r_multiple', 'score'].forEach(col => {
+                const icon = document.getElementById(`sort-icon-${col}`);
+                if (icon) {
+                    icon.className = 'sort-icon';
+                    icon.textContent = '⇅';
+                }
+            });
+
+            const activeIcon = document.getElementById(`sort-icon-${currentSortColumn}`);
+            if (activeIcon) {
+                activeIcon.className = 'sort-icon active';
+                activeIcon.textContent = currentSortOrder === 'asc' ? '↑' : '↓';
+            }
+
+            const sortSelect = document.getElementById('sort-select');
+            if (sortSelect) {
+                sortSelect.value = `${currentSortColumn}-${currentSortOrder}`;
+            }
+        }
+        
+        // 심볼 관리
+        async function loadSymbolList() {
+            try {
+                const response = await fetch('/api/symbols');
+                const symbols = await response.json();
+                allSymbols = symbols;
+                filteredSymbols = [...symbols];
+                displaySymbolList();
+            } catch (error) {
+                console.error('심볼 목록 로드 실패:', error);
+            }
+        }
+        
+        function displaySymbolList() {
+            const symbolList = document.getElementById('symbol-list');
+            symbolList.innerHTML = '';
+            
+            const sorted = [...filteredSymbols].sort((a, b) => {
+                if (symbolSortOrder === 'asc') {
+                    return a.localeCompare(b);
+                } else {
+                    return b.localeCompare(a);
+                }
+            });
+            
+            sorted.forEach(symbol => {
+                const item = document.createElement('div');
+                item.className = 'symbol-item';
+                if (symbol === selectedSymbol) {
+                    item.classList.add('selected');
+                }
+                item.textContent = symbol;
+                item.onclick = () => selectSymbol(symbol);
+                symbolList.appendChild(item);
+            });
+            
+            if (sorted.length === 0) {
+                symbolList.innerHTML = '<div class="px-4 py-3 text-sm text-gray-500 text-center">검색 결과 없음</div>';
+            }
+        }
+        
+        function toggleSymbolDropdown() {
+            const dropdown = document.getElementById('symbol-dropdown');
+            dropdown.classList.toggle('hidden');
+            if (!dropdown.classList.contains('hidden')) {
+                document.getElementById('symbol-search').focus();
+            }
+        }
+        
+        function selectSymbol(symbol) {
+            selectedSymbol = symbol;
+            document.getElementById('symbol-search').value = symbol;
+            
+            const badge = document.getElementById('selected-symbol-badge');
+            const badgeText = document.getElementById('selected-symbol-text');
+            badgeText.textContent = symbol;
+            badge.classList.remove('hidden');
+            
+            document.getElementById('symbol-dropdown').classList.add('hidden');
+            loadSignals();
+            displaySymbolList();
+        }
+        
+        function selectSymbolFromTable(symbol) {
+            selectSymbol(symbol);
+        }
+        
+        function clearSymbolFilter() {
+            selectedSymbol = '';
+            document.getElementById('symbol-search').value = '';
+            document.getElementById('selected-symbol-badge').classList.add('hidden');
+            filteredSymbols = [...allSymbols];
+            displaySymbolList();
+            loadSignals();
+        }
+        
+        function selectAllSymbols() {
+            clearSymbolFilter();
+        }
+        
+        function toggleSymbolSort() {
+            symbolSortOrder = symbolSortOrder === 'asc' ? 'desc' : 'asc';
+            const btn = document.getElementById('symbol-sort-btn');
+            btn.textContent = symbolSortOrder === 'asc' ? 'A→Z' : 'Z→A';
+            displaySymbolList();
+        }
+        
+        function searchSymbols(query) {
+            if (!query) {
+                filteredSymbols = [...allSymbols];
+            } else {
+                const lowerQuery = query.toLowerCase();
+                filteredSymbols = allSymbols.filter(symbol => 
+                    symbol.toLowerCase().includes(lowerQuery)
+                );
+            }
+            displaySymbolList();
+        }
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 심볼 검색 이벤트
+            const searchInput = document.getElementById('symbol-search');
+            searchInput.addEventListener('input', (e) => {
+                searchSymbols(e.target.value);
+            });
+            searchInput.addEventListener('focus', () => {
+                document.getElementById('symbol-dropdown').classList.remove('hidden');
+            });
+            searchInput.addEventListener('click', () => {
+                searchInput.select();
+            });
+            
+            // 필터 변경 이벤트
+            document.getElementById('limit-filter').addEventListener('change', loadSignals);
+            
+            // 외부 클릭 시 드롭다운 닫기
+            document.addEventListener('click', (event) => {
+                const dropdown = document.getElementById('symbol-dropdown');
+                const searchInput = document.getElementById('symbol-search');
+                const dropdownBtn = document.getElementById('symbol-dropdown-btn');
+                
+                if (!dropdown.contains(event.target) && 
+                    event.target !== searchInput && 
+                    event.target !== dropdownBtn) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+            
+            loadWidgetConfig();
+            await loadAvailableWidgets();
+            await loadSymbolList();
+            await renderWidgets();
+            await loadCharts();
+            await loadSignals();
+
+            // 30초마다 위젯 데이터 갱신
+            setInterval(renderWidgets, 30000);
+            // 30초마다 신호 데이터 갱신
+            setInterval(loadSignals, 30000);
+        });
+
+        // 모달 외부 클릭 시 닫기
+        window.onclick = function(event) {
+            const modal = document.getElementById('widgetModal');
+            if (event.target == modal) {
+                closeWidgetModal();
+            }
+        }
+    </script>
+</body>
+</html>

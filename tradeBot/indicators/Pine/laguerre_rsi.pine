@@ -1,0 +1,78 @@
+//@version=5
+// ============================================
+// Laguerre RSI (Adaptive RSI)
+// 4단계 지수 필터를 사용한 부드러운 RSI
+// ============================================
+indicator("Laguerre RSI", overlay=false)
+
+// 입력 파라미터
+gamma = input.float(0.7, "Gamma (Smoothing)", minval=0.1, maxval=0.99, step=0.05, tooltip="높을수록 부드러움, 낮을수록 민감함")
+overbought = input.int(80, "Overbought Level")
+oversold = input.int(20, "Oversold Level")
+showBands = input.bool(true, "Show Dynamic Bands")
+bandLength = input.int(20, "Band Length")
+bandMult = input.float(1.5, "Band Multiplier", step=0.1)
+
+// Laguerre 필터 계산 (4단계 지수 필터)
+var float L0 = 0.0
+var float L1 = 0.0
+var float L2 = 0.0
+var float L3 = 0.0
+
+L0 := (1 - gamma) * close + gamma * nz(L0[1])
+L1 := -gamma * L0 + nz(L0[1]) + gamma * nz(L1[1])
+L2 := -gamma * L1 + nz(L1[1]) + gamma * nz(L2[1])
+L3 := -gamma * L2 + nz(L2[1]) + gamma * nz(L3[1])
+
+// RSI 계산 (상승/하락 누적)
+cu = (L0 > L1 ? L0 - L1 : 0) + (L1 > L2 ? L1 - L2 : 0) + (L2 > L3 ? L2 - L3 : 0)
+cd = (L0 < L1 ? L1 - L0 : 0) + (L1 < L2 ? L2 - L1 : 0) + (L2 < L3 ? L3 - L2 : 0)
+
+lrsi = cu + cd != 0 ? cu / (cu + cd) * 100 : 50
+
+// 시그널 라인 (smoothed)
+signal = ta.ema(lrsi, 5)
+
+// 동적 밴드 계산
+basis = ta.sma(lrsi, bandLength)
+dev = ta.stdev(lrsi, bandLength)
+upperBand = basis + dev * bandMult
+lowerBand = basis - dev * bandMult
+
+// 밴드 클램핑 (0-100 범위)
+upperBand := math.min(upperBand, 95)
+lowerBand := math.max(lowerBand, 5)
+
+// 색상 정의
+lrsiColor = lrsi > signal ? color.red : color.blue
+signalColor = color.blue
+
+// 플롯
+plot(lrsi, "Laguerre RSI", color=lrsiColor, linewidth=2)
+plot(signal, "Signal", color=signalColor, linewidth=1)
+
+// 밴드 영역 채우기
+p1 = plot(showBands ? upperBand : na, "Upper Band", color=color.new(color.green, 80))
+p2 = plot(showBands ? lowerBand : na, "Lower Band", color=color.new(color.green, 80))
+fill(p1, p2, color=color.new(color.green, 90), title="Band Fill")
+
+// 기준선
+hline(overbought, "Overbought", color=color.gray, linestyle=hline.style_dashed)
+hline(oversold, "Oversold", color=color.gray, linestyle=hline.style_dashed)
+hline(50, "Middle", color=color.gray, linestyle=hline.style_dotted)
+
+// 배경색 (과매수/과매도 영역)
+bgcolor(lrsi > overbought ? color.new(color.red, 90) : lrsi < oversold ? color.new(color.green, 90) : na)
+
+// 크로스 신호
+bullCross = ta.crossover(lrsi, signal) and lrsi < 40
+bearCross = ta.crossunder(lrsi, signal) and lrsi > 60
+
+plotshape(bullCross, "Buy Signal", shape.triangleup, location.bottom, color.green, size=size.small)
+plotshape(bearCross, "Sell Signal", shape.triangledown, location.top, color.red, size=size.small)
+
+// 알림
+alertcondition(bullCross, "Laguerre RSI Bullish", "Laguerre RSI 매수 신호")
+alertcondition(bearCross, "Laguerre RSI Bearish", "Laguerre RSI 매도 신호")
+alertcondition(lrsi > overbought, "Overbought", "Laguerre RSI 과매수 영역")
+alertcondition(lrsi < oversold, "Oversold", "Laguerre RSI 과매도 영역")

@@ -1,0 +1,116 @@
+//@version=5
+indicator("EMA Divergence + Volume Breakout", shorttitle="EMA Vol Div", overlay=true,
+         max_labels_count=500, max_boxes_count=500)
+
+// ============================================================================
+// 입력 파라미터
+// ============================================================================
+
+ema_fast = input.int(20, "EMA 빠른선 (EMA20)", minval=1, group="EMA")
+ema_slow = input.int(59, "EMA 느린선 (EMA59)", minval=1, group="EMA")
+
+// 이격 확대 감지
+divergence_lookback = input.int(5, "이격 확대 확인 캔들 수", minval=2, group="이격 확대")
+min_spread_increase_pct = input.float(0.05, "최소 이격 증가율 (%)", minval=0.01, step=0.01, group="이격 확대")
+
+// 볼륨 돌파
+volume_ma_period = input.int(20, "볼륨 MA 기간", minval=1, group="볼륨")
+volume_multiplier = input.float(1.5, "볼륨 돌파 배수 (MA 대비)", minval=1.0, step=0.1, group="볼륨")
+
+// 신호 표시
+show_long_signals = input.bool(true, "롱 신호 표시", group="신호")
+show_short_signals = input.bool(true, "숏 신호 표시", group="신호")
+signal_label_size = input.string("small", "라벨 크기", options=["tiny", "small", "normal", "large"], group="신호")
+
+// ============================================================================
+// 지표 계산
+// ============================================================================
+
+ema20 = ta.ema(close, ema_fast)
+ema59 = ta.ema(close, ema_slow)
+
+// 이격 (스프레드): 롱일 때 양수, 숏일 때 음수
+spread = ema20 - ema59
+
+// 이격의 변화율 (직전 N캔들 대비)
+spread_now = spread
+spread_ago = spread[divergence_lookback]
+spread_increase_pct = math.abs(spread_now) > 0.0001 ? 
+     ((math.abs(spread_now) - math.abs(spread_ago)) / math.abs(spread_ago)) * 100 : 0.0
+
+// 볼륨
+vol_ma = ta.sma(volume, volume_ma_period)
+volume_surge = vol_ma > 0 and volume >= vol_ma * volume_multiplier
+
+// 이격 확대 조건
+// 롱: EMA20 > EMA59 이고, 이격이 점점 벌어지는 중 (spread 증가)
+spread_increasing_long = ema20 > ema59 and spread > spread[1] and spread[1] > spread[2]
+// 숏: EMA20 < EMA59 이고, 이격이 점점 벌어지는 중 (spread가 더 음수로)
+spread_increasing_short = ema20 < ema59 and spread < spread[1] and spread[1] < spread[2]
+
+// 추가: N캔들 동안 이격이 지속적으로 확대
+var float spread_start = 0.0
+spread_start := spread[divergence_lookback]
+spread_increase_ratio = math.abs(spread_start) > 0.0001 ? 
+     (math.abs(spread_now) - math.abs(spread_start)) / math.abs(spread_start) * 100 : 0.0
+
+divergence_long = ema20 > ema59 and spread_increase_ratio >= min_spread_increase_pct
+divergence_short = ema20 < ema59 and spread_increase_ratio >= min_spread_increase_pct
+
+// 캔들 방향
+bullish_candle = close > open
+bearish_candle = close < open
+
+// ============================================================================
+// 신호 조건
+// ============================================================================
+
+// 롱: EMA20>EMA59, 이격 확대, 볼륨 돌파, 상승 캔들
+long_signal = show_long_signals and 
+     divergence_long and 
+     volume_surge and 
+     bullish_candle and 
+     (spread_increasing_long or spread_increase_ratio >= min_spread_increase_pct)
+
+// 숏: EMA20<EMA59, 이격 확대(아래로), 볼륨 돌파, 하락 캔들
+short_signal = show_short_signals and 
+     divergence_short and 
+     volume_surge and 
+     bearish_candle and 
+     (spread_increasing_short or spread_increase_ratio >= min_spread_increase_pct)
+
+// ============================================================================
+// 플롯
+// ============================================================================
+
+plot(ema20, "EMA20", color=color.new(color.orange, 0), linewidth=2)
+plot(ema59, "EMA59", color=color.new(color.yellow, 0), linewidth=2)
+
+// 신호 마커
+plotshape(long_signal, title="롱 신호", style=shape.triangleup, location=location.belowbar, 
+         color=color.new(color.green, 0), size=size.normal)
+plotshape(short_signal, title="숏 신호", style=shape.triangledown, location=location.abovebar, 
+         color=color.new(color.red, 0), size=size.normal)
+
+// 신호 라벨
+if long_signal
+    label.new(bar_index, low, "📈 EMA 이격↑\n볼륨↑", 
+         style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
+if short_signal
+    label.new(bar_index, high, "📉 EMA 이격↓\n볼륨↑", 
+         style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
+
+// ============================================================================
+// 하단 패널: 이격 & 볼륨 상태
+// ============================================================================
+
+// 이격 바 차트 (별도 창에서 확인용 - overlay=false면)
+var table info_table = table.new(position.top_right, 2, 4, bgcolor=color.new(color.black, 80), border_width=1)
+if barstate.islast
+    table.cell(info_table, 0, 0, "EMA20-EMA59", text_color=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 0, str.tostring(spread, "#.####"), text_color=spread >= 0 ? color.green : color.red, text_size=size.small)
+    table.cell(info_table, 0, 1, "이격변화%", text_color=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 1, str.tostring(spread_increase_ratio, "#.##") + "%", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 0, 2, "볼륨/MA", text_color=color.gray, text_size=size.small)
+    vol_ratio = vol_ma > 0 ? (volume / vol_ma) * 100 : 0
+    table.cell(info_table, 1, 2, str.tostring(vol_ratio, "#.#") + "%", text_color=volume_surge ? color.lime : color.gray, text_size=size.small)

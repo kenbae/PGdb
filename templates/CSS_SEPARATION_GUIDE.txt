@@ -1,0 +1,293 @@
+# ============================================================
+# CSS 분리 완료 가이드
+# ============================================================
+
+## ✅ 완료된 작업
+
+CSS를 HTML에서 분리하여 별도 파일로 관리할 수 있도록 변경했습니다!
+
+## 📁 파일 구조
+
+```
+프로젝트/
+├── dashboard_api_modular.py
+├── templates/
+│   └── dashboard.html          ← CSS 제거, 링크만 포함
+└── static/
+    └── dashboard.css           ← 모든 CSS 스타일
+```
+
+## 🔧 변경 사항
+
+### **1. HTML 파일 (dashboard.html)**
+
+**이전:**
+```html
+<head>
+    <style>
+        /* 200줄 이상의 CSS... */
+    </style>
+</head>
+```
+
+**변경 후:**
+```html
+<head>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+```
+
+### **2. CSS 파일 (dashboard.css)**
+
+모든 스타일이 정리된 형태로 분리되었습니다:
+
+```css
+/* ============================================================
+   섹션별로 주석 정리
+   ============================================================ */
+
+/* 위젯 카드 스타일 */
+.widget-card { ... }
+
+/* 모달 스타일 */
+.modal { ... }
+
+/* LLM 보고서 스타일 */
+.report-content { ... }
+```
+
+## 🎨 CSS 수정 방법
+
+이제 `dashboard.css` 파일만 수정하면 됩니다!
+
+### **예시 1: 보고서 폰트 크기 변경**
+
+**파일:** `static/dashboard.css`
+
+```css
+/* LLM 보고서 스타일 */
+.report-content {
+    line-height: 1.6;
+    color: #1F2937;
+    font-size: 0.9rem;  /* ← 이 값을 수정 */
+}
+```
+
+**변경 예시:**
+```css
+font-size: 1rem;     /* 더 크게 */
+font-size: 0.85rem;  /* 더 작게 */
+```
+
+### **예시 2: 리스트 간격 조정**
+
+```css
+.report-content li {
+    margin-bottom: 0.25rem;  /* ← 이 값을 수정 */
+    padding-left: 1.5rem;
+    position: relative;
+    line-height: 1.5;
+}
+```
+
+**변경 예시:**
+```css
+margin-bottom: 0;        /* 완전히 붙이기 */
+margin-bottom: 0.5rem;   /* 조금 띄우기 */
+margin-bottom: 1rem;     /* 많이 띄우기 */
+```
+
+### **예시 3: 제목 색상 변경**
+
+```css
+.report-content h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1F2937;  /* ← 이 값을 수정 */
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+```
+
+**변경 예시:**
+```css
+color: #3B82F6;  /* 파란색 */
+color: #10B981;  /* 초록색 */
+color: #EF4444;  /* 빨간색 */
+```
+
+### **예시 4: 불릿 포인트 색상/스타일 변경**
+
+```css
+.report-content li:before {
+    content: "•";
+    position: absolute;
+    left: 0.5rem;
+    color: #3B82F6;  /* ← 색상 변경 */
+    font-weight: bold;
+}
+```
+
+**변경 예시:**
+```css
+content: "▸";        /* 화살표 */
+content: "■";        /* 사각형 */
+content: "✓";        /* 체크 */
+color: #10B981;      /* 초록색 */
+```
+
+## 🚀 적용 방법
+
+### **1. CSS 수정**
+```bash
+# static/dashboard.css 파일 열기
+notepad static/dashboard.css    # Windows
+vim static/dashboard.css        # Linux/Mac
+```
+
+### **2. 변경사항 적용**
+```bash
+# 서버는 재시작 불필요!
+# 브라우저만 새로고침 (Ctrl + F5)
+```
+
+### **3. 캐시 클리어**
+```
+Ctrl + F5        (Windows/Linux)
+Cmd + Shift + R  (Mac)
+```
+
+## 📋 주요 CSS 클래스 목록
+
+### **보고서 관련:**
+```css
+.report-content          /* 전체 컨테이너 */
+.report-content h1       /* 큰 제목 */
+.report-content h2       /* 중간 제목 */
+.report-content h3       /* 작은 제목 */
+.report-content p        /* 단락 */
+.report-content ul       /* 리스트 전체 */
+.report-content li       /* 리스트 항목 */
+.report-content strong   /* 굵은 글씨 */
+.report-content code     /* 인라인 코드 */
+```
+
+### **위젯 관련:**
+```css
+.widget-card             /* 위젯 카드 */
+.widget-metric           /* 위젯 숫자 */
+.widget-label            /* 위젯 라벨 */
+```
+
+### **배지 관련:**
+```css
+.badge                   /* 기본 배지 */
+.badge-long              /* LONG 배지 */
+.badge-short             /* SHORT 배지 */
+```
+
+## 🎯 자주 수정할 항목
+
+### **1. 전체 폰트 크기**
+```css
+/* 라인 163 */
+.report-content {
+    font-size: 0.9rem;  /* ← 여기 수정 */
+}
+```
+
+### **2. 줄간격**
+```css
+/* 라인 164 */
+.report-content {
+    line-height: 1.6;  /* ← 여기 수정 */
+}
+```
+
+### **3. 리스트 항목 간격**
+```css
+/* 라인 199 */
+.report-content li {
+    margin-bottom: 0.25rem;  /* ← 여기 수정 */
+}
+```
+
+### **4. 제목 크기**
+```css
+/* 라인 169, 177, 184 */
+.report-content h1 { font-size: 1.5rem; }   /* ← h1 크기 */
+.report-content h2 { font-size: 1.125rem; } /* ← h2 크기 */
+.report-content h3 { font-size: 1rem; }     /* ← h3 크기 */
+```
+
+## 💡 유용한 CSS 값
+
+### **크기 단위:**
+```css
+rem: 루트 폰트 기준 (권장)
+  1rem = 16px (기본)
+  0.875rem = 14px
+  0.9rem = 14.4px
+  1rem = 16px
+  1.125rem = 18px
+  1.25rem = 20px
+
+px: 픽셀 단위 (고정)
+  12px, 14px, 16px, 18px, 20px
+
+em: 부모 요소 기준
+  0.9em, 1em, 1.1em
+```
+
+### **간격 값:**
+```css
+0         /* 없음 */
+0.25rem   /* 4px - 아주 작음 */
+0.5rem    /* 8px - 작음 */
+0.75rem   /* 12px - 중간 */
+1rem      /* 16px - 보통 */
+1.5rem    /* 24px - 큼 */
+2rem      /* 32px - 아주 큼 */
+```
+
+### **색상 코드:**
+```css
+#111827   /* 거의 검정 */
+#1F2937   /* 진한 회색 */
+#374151   /* 회색 */
+#6B7280   /* 중간 회색 */
+#9CA3AF   /* 연한 회색 */
+#3B82F6   /* 파란색 */
+#10B981   /* 초록색 */
+#EF4444   /* 빨간색 */
+#F59E0B   /* 주황색 */
+```
+
+## ✅ 설치 체크리스트
+
+파일 위치:
+- [ ] `static/dashboard.css` 파일 존재
+- [ ] `templates/dashboard.html`에 CSS 링크 추가
+- [ ] `dashboard_api_modular.py`에서 static 마운트 확인
+
+테스트:
+- [ ] 서버 실행
+- [ ] 브라우저 접속
+- [ ] 스타일 정상 적용 확인
+- [ ] CSS 수정 후 새로고침 테스트
+
+## 🎉 완료!
+
+이제 CSS 수정이 훨씬 편해졌습니다!
+
+**장점:**
+- ✅ HTML과 CSS 분리로 가독성 향상
+- ✅ CSS만 수정하면 됨 (서버 재시작 불필요)
+- ✅ 주석으로 섹션 구분
+- ✅ 버전 관리 용이
+
+**수정 시:**
+1. `static/dashboard.css` 열기
+2. 원하는 값 수정
+3. 저장
+4. 브라우저 새로고침 (Ctrl + F5)

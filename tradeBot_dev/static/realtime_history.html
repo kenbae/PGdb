@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>거래 히스토리 - Trading Bot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body {
+            background: #0b0e11;
+            color: #eaecef;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .filter-btn {
+            transition: all 0.2s;
+        }
+        .filter-btn.active {
+            background: #1e80ff;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto px-4 py-6">
+        <!-- 헤더 -->
+        <div class="bg-gray-800 rounded-lg p-4 mb-6 flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-yellow-400">📊 거래 히스토리</h1>
+                <p class="text-sm text-gray-400 mt-1">실시간 봇에서 실행된 모든 진입/청산 내역</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <button onclick="loadHistory()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    🔄 새로고침
+                </button>
+                <div class="text-sm text-gray-400" id="last-update">
+                    -
+                </div>
+            </div>
+        </div>
+
+        <!-- 필터 및 통계 -->
+        <div class="bg-gray-800 rounded-lg p-4 mb-6">
+            <div class="flex flex-wrap items-center gap-4 mb-4">
+                <span class="text-sm text-gray-400">필터:</span>
+                <button onclick="setFilter('all')" class="filter-btn active px-3 py-1 bg-gray-700 text-gray-300 rounded text-sm" id="filter-all">
+                    전체
+                </button>
+                <button onclick="setFilter('entry')" class="filter-btn px-3 py-1 bg-gray-700 text-gray-300 rounded text-sm" id="filter-entry">
+                    진입만
+                </button>
+                <button onclick="setFilter('exit')" class="filter-btn px-3 py-1 bg-gray-700 text-gray-300 rounded text-sm" id="filter-exit">
+                    청산만
+                </button>
+                <div class="flex items-center gap-2 ml-4">
+                    <span class="text-sm text-gray-400">종목:</span>
+                    <select id="symbol-filter" onchange="applyFilters()" class="px-3 py-1 bg-gray-700 text-gray-300 rounded text-sm border border-gray-600">
+                        <option value="">전체</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-400">날짜:</span>
+                    <input type="date" id="date-from" onchange="applyFilters()" class="px-3 py-1 bg-gray-700 text-gray-300 rounded text-sm border border-gray-600">
+                    <span class="text-gray-400">~</span>
+                    <input type="date" id="date-to" onchange="applyFilters()" class="px-3 py-1 bg-gray-700 text-gray-300 rounded text-sm border border-gray-600">
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-gray-900 rounded p-3">
+                    <div class="text-xs text-gray-400 mb-1">총 거래</div>
+                    <div class="text-xl font-bold" id="stat-total">0</div>
+                </div>
+                <div class="bg-gray-900 rounded p-3">
+                    <div class="text-xs text-gray-400 mb-1">진입</div>
+                    <div class="text-xl font-bold text-green-400" id="stat-entries">0</div>
+                </div>
+                <div class="bg-gray-900 rounded p-3">
+                    <div class="text-xs text-gray-400 mb-1">청산</div>
+                    <div class="text-xl font-bold text-yellow-400" id="stat-exits">0</div>
+                </div>
+                <div class="bg-gray-900 rounded p-3">
+                    <div class="text-xs text-gray-400 mb-1">누적 PnL</div>
+                    <div class="text-xl font-bold" id="stat-pnl">$0.00</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 일별 P&L 차트 -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700 mb-6">
+            <div class="p-4 border-b border-gray-700">
+                <h2 class="text-lg font-bold">📈 일별 P&L 차트</h2>
+            </div>
+            <div class="p-4">
+                <canvas id="dailyPnlChart" style="max-height: 400px;"></canvas>
+            </div>
+        </div>
+
+        <!-- 거래 내역 테이블 -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700">
+            <div class="p-4 border-b border-gray-700">
+                <h2 class="text-lg font-bold">📋 거래 내역</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-900">
+                        <tr>
+                            <th class="px-4 py-3 text-left">시간</th>
+                            <th class="px-4 py-3 text-left">종목</th>
+                            <th class="px-4 py-3 text-left">유형</th>
+                            <th class="px-4 py-3 text-left">방향</th>
+                            <th class="px-4 py-3 text-right">진입가</th>
+                            <th class="px-4 py-3 text-right">청산가</th>
+                            <th class="px-4 py-3 text-right">수량</th>
+                            <th class="px-4 py-3 text-left">사유</th>
+                            <th class="px-4 py-3 text-right">PnL</th>
+                            <th class="px-4 py-3 text-right">PnL %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trades-table-body">
+                        <tr>
+                            <td colspan="10" class="px-4 py-8 text-center text-gray-500">
+                                거래 내역을 불러오는 중...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let currentFilter = 'all';
+        let allTrades = [];
+        let dailyPnlChart = null;
+        let selectedSymbol = '';
+        let dateFrom = '';
+        let dateTo = '';
+
+        // 필터 설정
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`filter-${filter}`).classList.add('active');
+            applyFilters();
+        }
+
+        // 종목 필터 업데이트
+        function updateSymbolFilter() {
+            const symbols = [...new Set(allTrades.map(t => t.symbol).filter(Boolean))].sort();
+            const select = document.getElementById('symbol-filter');
+            const currentValue = select.value;
+            
+            select.innerHTML = '<option value="">전체</option>' + 
+                symbols.map(s => `<option value="${s}">${s}</option>`).join('');
+            
+            if (currentValue && symbols.includes(currentValue)) {
+                select.value = currentValue;
+            }
+        }
+
+        // 모든 필터 적용
+        function applyFilters() {
+            selectedSymbol = document.getElementById('symbol-filter').value;
+            dateFrom = document.getElementById('date-from').value;
+            dateTo = document.getElementById('date-to').value;
+            renderDailyPnlChart();
+            renderTrades();
+        }
+
+        // 거래 히스토리 로드
+        async function loadHistory() {
+            try {
+                const response = await fetch(`${API_BASE}/api/realtime/trade-history`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // API가 trade_history 배열을 직접 반환하는 경우 (우선 처리)
+                    if (Array.isArray(data.trade_history)) {
+                        allTrades = data.trade_history;
+                    } 
+                    // 여러 엔진 지원: engines 객체가 있으면 모든 엔진의 히스토리를 합침
+                    else if (data.engines && typeof data.engines === 'object') {
+                        allTrades = [];
+                        for (const engineId in data.engines) {
+                            const engineHistory = data.engines[engineId].trade_history || [];
+                            allTrades.push(...engineHistory);
+                        }
+                    } else {
+                        allTrades = [];
+                    }
+                    
+                    document.getElementById('last-update').textContent = `마지막 업데이트: ${new Date().toLocaleTimeString('ko-KR')}`;
+                    updateSymbolFilter();
+                    updateStats();
+                    renderDailyPnlChart();
+                    renderTrades();
+                } else {
+                    showError(data.message || '거래 히스토리를 불러올 수 없습니다.');
+                }
+            } catch (e) {
+                console.error('히스토리 로드 실패:', e);
+                showError(`거래 히스토리를 불러오는 중 오류가 발생했습니다: ${e.message || e}`);
+            }
+        }
+
+        // 통계 업데이트
+        function updateStats() {
+            const entries = allTrades.filter(t => t.type === 'entry');
+            const exits = allTrades.filter(t => t.type === 'exit');
+            const totalPnl = exits.reduce((sum, t) => {
+                const pnl = (t.pnl != null && !isNaN(t.pnl)) ? t.pnl : 0;
+                return sum + pnl;
+            }, 0);
+
+            document.getElementById('stat-total').textContent = allTrades.length;
+            document.getElementById('stat-entries').textContent = entries.length;
+            document.getElementById('stat-exits').textContent = exits.length;
+            
+            const safeTotalPnl = (totalPnl != null && !isNaN(totalPnl)) ? totalPnl : 0;
+            const pnlColor = safeTotalPnl >= 0 ? 'text-green-400' : 'text-red-400';
+            document.getElementById('stat-pnl').className = `text-xl font-bold ${pnlColor}`;
+            document.getElementById('stat-pnl').textContent = `$${safeTotalPnl.toFixed(2)}`;
+        }
+
+        // 일별 P&L 차트 렌더링
+        function renderDailyPnlChart() {
+            // 필터링된 거래 가져오기
+            let filteredTrades = allTrades.filter(t => {
+                // 타입 필터
+                if (currentFilter === 'entry' && t.type !== 'entry') return false;
+                if (currentFilter === 'exit' && t.type !== 'exit') return false;
+                
+                // 종목 필터
+                if (selectedSymbol && t.symbol !== selectedSymbol) return false;
+                
+                // 날짜 필터
+                const tradeDate = new Date(t.time || t.entry_time || t.exit_time || 0);
+                if (dateFrom) {
+                    const fromDate = new Date(dateFrom);
+                    fromDate.setHours(0, 0, 0, 0);
+                    if (tradeDate < fromDate) return false;
+                }
+                if (dateTo) {
+                    const toDate = new Date(dateTo);
+                    toDate.setHours(23, 59, 59, 999);
+                    if (tradeDate > toDate) return false;
+                }
+                
+                return true;
+            });
+
+            // 청산 거래만 필터링 (PnL이 있는 것만)
+            const exitTrades = filteredTrades.filter(t => t.type === 'exit' && t.pnl != null && !isNaN(t.pnl));
+            
+            // 일별 P&L 계산
+            const dailyPnl = {};
+            exitTrades.forEach(trade => {
+                const tradeDate = new Date(trade.time || trade.exit_time || 0);
+                const dateKey = tradeDate.toISOString().split('T')[0]; // YYYY-MM-DD
+                
+                if (!dailyPnl[dateKey]) {
+                    dailyPnl[dateKey] = 0;
+                }
+                dailyPnl[dateKey] += Number(trade.pnl) || 0;
+            });
+
+            // 날짜순 정렬
+            const sortedDates = Object.keys(dailyPnl).sort();
+            const labels = sortedDates;
+            const data = sortedDates.map(date => dailyPnl[date]);
+
+            // Chart.js 설정
+            const ctx = document.getElementById('dailyPnlChart');
+            if (dailyPnlChart) {
+                dailyPnlChart.destroy();
+            }
+
+            dailyPnlChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '일별 P&L (USDT)',
+                        data: data,
+                        backgroundColor: data.map(val => val >= 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)'),
+                        borderColor: data.map(val => val >= 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)'),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    return `P&L: $${value.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                color: '#9ca3af',
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(75, 85, 99, 0.3)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#9ca3af'
+                            },
+                            grid: {
+                                color: 'rgba(75, 85, 99, 0.3)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 거래 내역 렌더링
+        function renderTrades() {
+            const tbody = document.getElementById('trades-table-body');
+            
+            // 필터링
+            let filteredTrades = allTrades;
+            
+            // 타입 필터
+            if (currentFilter === 'entry') {
+                filteredTrades = filteredTrades.filter(t => t.type === 'entry');
+            } else if (currentFilter === 'exit') {
+                filteredTrades = filteredTrades.filter(t => t.type === 'exit');
+            }
+            
+            // 종목 필터
+            if (selectedSymbol) {
+                filteredTrades = filteredTrades.filter(t => t.symbol === selectedSymbol);
+            }
+            
+            // 날짜 필터
+            if (dateFrom) {
+                const fromDate = new Date(dateFrom);
+                fromDate.setHours(0, 0, 0, 0);
+                filteredTrades = filteredTrades.filter(t => {
+                    const tradeDate = new Date(t.time || t.entry_time || t.exit_time || 0);
+                    return tradeDate >= fromDate;
+                });
+            }
+            if (dateTo) {
+                const toDate = new Date(dateTo);
+                toDate.setHours(23, 59, 59, 999);
+                filteredTrades = filteredTrades.filter(t => {
+                    const tradeDate = new Date(t.time || t.entry_time || t.exit_time || 0);
+                    return tradeDate <= toDate;
+                });
+            }
+
+            // 시간순 정렬 (최신순)
+            filteredTrades = [...filteredTrades].sort((a, b) => {
+                const timeA = new Date(a.time || a.entry_time || a.exit_time || 0);
+                const timeB = new Date(b.time || b.entry_time || b.exit_time || 0);
+                return timeB - timeA;
+            });
+
+            if (filteredTrades.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" class="px-4 py-8 text-center text-gray-500">
+                            거래 내역이 없습니다.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = filteredTrades.map(trade => {
+                const timeStr = trade.time || trade.entry_time || trade.exit_time;
+                const time = timeStr ? new Date(timeStr) : new Date();
+                
+                const typeBadge = trade.type === 'entry' 
+                    ? '<span class="px-2 py-1 bg-green-600 text-white rounded text-xs font-bold">진입</span>'
+                    : '<span class="px-2 py-1 bg-yellow-600 text-white rounded text-xs font-bold">청산</span>';
+                
+                const side = trade.side || '';
+                const direction = trade.direction || (side === 'BUY' || side === 'buy' ? 'long' : 'short');
+                const directionBadge = direction === 'long'
+                    ? '<span class="px-2 py-1 bg-blue-600 text-white rounded text-xs font-bold">LONG</span>'
+                    : '<span class="px-2 py-1 bg-red-600 text-white rounded text-xs font-bold">SHORT</span>';
+
+                // 안전한 숫자 변환
+                const safeEntryPrice = (trade.entry_price != null && !isNaN(trade.entry_price)) ? Number(trade.entry_price) : null;
+                const safeExitPrice = (trade.exit_price != null && !isNaN(trade.exit_price)) ? Number(trade.exit_price) : null;
+                const safeQuantity = (trade.quantity != null && !isNaN(trade.quantity)) ? Number(trade.quantity) : 0;
+                const safePnl = (trade.pnl != null && !isNaN(trade.pnl)) ? Number(trade.pnl) : null;
+                const safePnlPct = (trade.pnl_percent != null && !isNaN(trade.pnl_percent)) ? Number(trade.pnl_percent) : (trade.pnl_pct != null && !isNaN(trade.pnl_pct)) ? Number(trade.pnl_pct) : null;
+                
+                const reason = trade.exit_reason || trade.reason || (trade.type === 'entry' ? (trade.entry_type || 'signal') : '-');
+                
+                const rowClass = trade.type === 'entry' 
+                    ? 'bg-green-900/20' 
+                    : (safePnl != null && safePnl >= 0 ? 'bg-green-900/30' : 'bg-red-900/30');
+
+                const symbol = trade.symbol || '-';
+                
+                return `
+                    <tr class="border-b border-gray-700 ${rowClass}">
+                        <td class="px-4 py-3">${time.toLocaleString('ko-KR')}</td>
+                        <td class="px-4 py-3 font-mono font-semibold">${symbol}</td>
+                        <td class="px-4 py-3">${typeBadge}</td>
+                        <td class="px-4 py-3">${directionBadge}</td>
+                        <td class="px-4 py-3 text-right font-mono">${safeEntryPrice ? `$${safeEntryPrice.toFixed(8)}` : '-'}</td>
+                        <td class="px-4 py-3 text-right font-mono">${safeExitPrice ? `$${safeExitPrice.toFixed(8)}` : '-'}</td>
+                        <td class="px-4 py-3 text-right font-mono">${safeQuantity.toFixed(4)}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-1 bg-gray-700 rounded text-xs">${reason}</span>
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono font-bold ${safePnl != null ? (safePnl >= 0 ? 'text-green-400' : 'text-red-400') : 'text-gray-400'}">
+                            ${safePnl != null ? (safePnl >= 0 ? '+' : '') + safePnl.toFixed(2) : '-'}
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono font-bold ${safePnlPct != null ? (safePnlPct >= 0 ? 'text-green-400' : 'text-red-400') : 'text-gray-400'}">
+                            ${safePnlPct != null ? (safePnlPct >= 0 ? '+' : '') + safePnlPct.toFixed(2) + '%' : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // 에러 표시
+        function showError(message) {
+            const tbody = document.getElementById('trades-table-body');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="10" class="px-4 py-8 text-center text-red-400">
+                        ${message}
+                    </td>
+                </tr>
+            `;
+        }
+
+        // 초기 날짜 설정 (최근 30일)
+        function initDateFilters() {
+            const today = new Date();
+            const thirtyDaysAgo = new Date(today);
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            
+            document.getElementById('date-to').value = today.toISOString().split('T')[0];
+            document.getElementById('date-from').value = thirtyDaysAgo.toISOString().split('T')[0];
+            
+            dateFrom = document.getElementById('date-from').value;
+            dateTo = document.getElementById('date-to').value;
+        }
+
+        // 초기화
+        initDateFilters();
+        loadHistory();
+    </script>
+</body>
+</html>

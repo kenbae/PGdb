@@ -1,0 +1,100 @@
+//@version=5
+indicator("Bollinger Bands Gradient", overlay=true)
+
+// === 입력 설정 ===
+length = input.int(20, "BB Length", minval=1)
+src = input.source(close, "Source")
+
+// 표준편차 배수 설정
+mult1 = input.float(1.0, "Std Dev 1", minval=0.1, step=0.1)
+mult2 = input.float(2.0, "Std Dev 2", minval=0.1, step=0.1)
+mult3 = input.float(3.0, "Std Dev 3", minval=0.1, step=0.1)
+
+// EMA 설정
+showEMA = input.bool(true, "Show EMAs")
+ema1Length = input.int(9, "EMA 1 Length", minval=1)
+ema2Length = input.int(21, "EMA 2 Length", minval=1)
+ema3Length = input.int(50, "EMA 3 Length", minval=1)
+
+// 색상 설정
+upperColor1 = input.color(color.new(color.red, 70), "Upper Band 1 Color")
+upperColor2 = input.color(color.new(color.orange, 75), "Upper Band 2 Color")
+upperColor3 = input.color(color.new(color.yellow, 80), "Upper Band 3 Color")
+lowerColor1 = input.color(color.new(color.lime, 70), "Lower Band 1 Color")
+lowerColor2 = input.color(color.new(color.green, 75), "Lower Band 2 Color")
+lowerColor3 = input.color(color.new(color.teal, 80), "Lower Band 3 Color")
+basisColor = input.color(color.new(color.white, 0), "Basis Color")
+
+// === 볼린저 밴드 계산 ===
+basis = ta.sma(src, length)
+dev = ta.stdev(src, length)
+
+// 상단 밴드
+upper1 = basis + dev * mult1
+upper2 = basis + dev * mult2
+upper3 = basis + dev * mult3
+
+// 하단 밴드
+lower1 = basis - dev * mult1
+lower2 = basis - dev * mult2
+lower3 = basis - dev * mult3
+
+// === EMA 계산 ===
+ema1 = ta.ema(src, ema1Length)
+ema2 = ta.ema(src, ema2Length)
+ema3 = ta.ema(src, ema3Length)
+
+// === 밴드 채움 (그라데이션 효과) ===
+// 상단 밴드 채움 (빨강/주황/노랑 그라데이션)
+fill_upper3 = plot(upper3, color=color.new(color.yellow, 95), title="Upper 3")
+fill_upper2 = plot(upper2, color=color.new(color.orange, 90), title="Upper 2")
+fill_upper1 = plot(upper1, color=color.new(color.red, 85), title="Upper 1")
+fill_basis = plot(basis, color=basisColor, linewidth=2, title="Basis")
+
+// 하단 밴드 채움 (초록/청록 그라데이션)
+fill_lower1 = plot(lower1, color=color.new(color.lime, 85), title="Lower 1")
+fill_lower2 = plot(lower2, color=color.new(color.green, 90), title="Lower 2")
+fill_lower3 = plot(lower3, color=color.new(color.teal, 95), title="Lower 3")
+
+// 채움 영역
+fill(fill_upper3, fill_upper2, color=upperColor3, title="Fill Upper 3-2")
+fill(fill_upper2, fill_upper1, color=upperColor2, title="Fill Upper 2-1")
+fill(fill_upper1, fill_basis, color=upperColor1, title="Fill Upper 1-Basis")
+fill(fill_basis, fill_lower1, color=lowerColor1, title="Fill Basis-Lower 1")
+fill(fill_lower1, fill_lower2, color=lowerColor2, title="Fill Lower 1-2")
+fill(fill_lower2, fill_lower3, color=lowerColor3, title="Fill Lower 2-3")
+
+// === EMA 라인 ===
+plot(showEMA ? ema1 : na, color=color.new(color.yellow, 0), linewidth=1, title="EMA 1")
+plot(showEMA ? ema2 : na, color=color.new(color.orange, 0), linewidth=1, title="EMA 2")
+plot(showEMA ? ema3 : na, color=color.new(color.red, 0), linewidth=2, title="EMA 3")
+
+// === 밴드 경계선 (선택적) ===
+showBorders = input.bool(false, "Show Band Borders")
+plot(showBorders ? upper3 : na, color=color.new(color.red, 50), linewidth=1, style=plot.style_line, title="Upper 3 Border")
+plot(showBorders ? lower3 : na, color=color.new(color.green, 50), linewidth=1, style=plot.style_line, title="Lower 3 Border")
+
+// === 알림 조건 ===
+alertcondition(ta.crossover(close, upper2), title="Cross Above Upper 2", message="Price crossed above upper band 2")
+alertcondition(ta.crossunder(close, lower2), title="Cross Below Lower 2", message="Price crossed below lower band 2")
+alertcondition(ta.crossover(close, basis), title="Cross Above Basis", message="Price crossed above basis")
+alertcondition(ta.crossunder(close, basis), title="Cross Below Basis", message="Price crossed below basis")
+
+// === 정보 테이블 (선택적) ===
+showTable = input.bool(true, "Show Info Table")
+tablePos = input.string("top_right", "Table Position", options=["top_right", "top_left", "bottom_right", "bottom_left"])
+
+var table infoTable = table.new(tablePos == "top_right" ? position.top_right : tablePos == "top_left" ? position.top_left : tablePos == "bottom_right" ? position.bottom_right : position.bottom_left, 2, 5)
+
+if showTable and barstate.islast
+    table.cell(infoTable, 0, 0, "BB Width", text_color=color.white, bgcolor=color.new(color.gray, 70))
+    table.cell(infoTable, 1, 0, str.tostring((upper2 - lower2) / basis * 100, "#.##") + "%", text_color=color.white, bgcolor=color.new(color.gray, 70))
+
+    table.cell(infoTable, 0, 1, "Position", text_color=color.white, bgcolor=color.new(color.gray, 70))
+    pos = close > upper1 ? "Above +1SD" : close > basis ? "Upper Half" : close > lower1 ? "Lower Half" : "Below -1SD"
+    posColor = close > basis ? color.new(color.green, 70) : color.new(color.red, 70)
+    table.cell(infoTable, 1, 1, pos, text_color=color.white, bgcolor=posColor)
+
+    table.cell(infoTable, 0, 2, "% from Basis", text_color=color.white, bgcolor=color.new(color.gray, 70))
+    pctFromBasis = (close - basis) / basis * 100
+    table.cell(infoTable, 1, 2, str.tostring(pctFromBasis, "#.##") + "%", text_color=pctFromBasis >= 0 ? color.lime : color.red, bgcolor=color.new(color.gray, 70))

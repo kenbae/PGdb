@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로세스 매니저</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'dark-primary': '#0b0e11',
+                        'dark-secondary': '#1e2329',
+                        'dark-tertiary': '#2b3139',
+                        'dark-border': '#2b3139',
+                        'text-primary': '#eaecef',
+                        'text-secondary': '#848e9c',
+                        'text-muted': '#5e6673',
+                        'accent-green': '#0ecb81',
+                        'accent-red': '#f6465d',
+                        'accent-yellow': '#f0b90b',
+                        'accent-blue': '#1e80ff',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 9999px;
+            border: 1px solid #3b424b;
+            background: rgba(255, 255, 255, 0.04);
+            color: #c7ccd4;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+            flex-shrink: 0;
+            align-self: flex-start;
+        }
+        .status-running {
+            background: rgba(14, 203, 129, 0.14);
+            border-color: rgba(14, 203, 129, 0.35);
+            color: #d7fff0;
+        }
+        .status-stopped {
+            background: rgba(132, 142, 156, 0.10);
+            border-color: rgba(132, 142, 156, 0.28);
+            color: #c7ccd4;
+        }
+        .status-error {
+            background: rgba(246, 70, 93, 0.12);
+            border-color: rgba(246, 70, 93, 0.35);
+            color: #ffe2e7;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        /* 다크 테마 오버라이드 */
+        body {
+            background: #0b0e11 !important;
+            color: #eaecef;
+        }
+
+        /* 카드 스타일 */
+        .bg-white {
+            background: #1e2329 !important;
+            border: 1px solid #2b3139;
+        }
+        /* 전체 시작 카드 (회색) */
+        .pm-card-gray {
+            background: #2b3139 !important;
+            border: 1px solid #3b424b;
+        }
+
+        /* 텍스트 색상 오버라이드 */
+        .text-gray-800, .text-gray-700 {
+            color: #eaecef !important;
+        }
+        .text-gray-600, .text-gray-500 {
+            color: #848e9c !important;
+        }
+
+        /* ============================================================
+           버튼 스타일 (편안한 비지니스 톤)
+           - tailwind 색상 유틸을 강제 오버라이드하지 않고, 전용 클래스 사용
+           ============================================================ */
+        .pm-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            padding: 0.42rem 0.75rem;
+            border-radius: 10px;
+            border: 1px solid #3b424b;
+            background: #2b3139;
+            color: #eaecef;
+            font-size: 0.85rem;
+            font-weight: 600;
+            line-height: 1.1;
+            transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+            user-select: none;
+        }
+        /* 작은 pill 버튼(전략 버튼 느낌) */
+        .pm-btn--sm {
+            padding: 0.34rem 0.62rem;
+            border-radius: 9999px;
+            font-size: 0.80rem;
+            font-weight: 700;
+        }
+        .pm-btn:hover {
+            background: #343b44;
+            border-color: #4a5561;
+        }
+        .pm-btn:active {
+            transform: translateY(1px);
+        }
+        .pm-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .pm-btn--primary {
+            background: rgba(30, 128, 255, 0.10);
+            border-color: rgba(30, 128, 255, 0.35);
+            color: #dbe9ff;
+        }
+        .pm-btn--primary:hover {
+            background: rgba(30, 128, 255, 0.16);
+            border-color: rgba(30, 128, 255, 0.55);
+        }
+
+        .pm-btn--success {
+            background: rgba(14, 203, 129, 0.10);
+            border-color: rgba(14, 203, 129, 0.35);
+            color: #d7fff0;
+        }
+        .pm-btn--success:hover {
+            background: rgba(14, 203, 129, 0.16);
+            border-color: rgba(14, 203, 129, 0.55);
+        }
+
+        .pm-btn--danger {
+            background: rgba(246, 70, 93, 0.10);
+            border-color: rgba(246, 70, 93, 0.35);
+            color: #ffe2e7;
+        }
+        .pm-btn--danger:hover {
+            background: rgba(246, 70, 93, 0.16);
+            border-color: rgba(246, 70, 93, 0.55);
+        }
+
+        .pm-btn--ghost {
+            background: transparent;
+            border-color: #3b424b;
+            color: #c7ccd4;
+        }
+        .pm-btn--ghost:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: #4a5561;
+            color: #eaecef;
+        }
+
+        .pm-btn--block {
+            width: 100%;
+        }
+
+        /* 입력 필드 */
+        input[type="text"], input[type="number"], select {
+            background: #2b3139 !important;
+            border: 1px solid #2b3139 !important;
+            color: #eaecef !important;
+        }
+        input[type="text"]:focus, input[type="number"]:focus, select:focus {
+            border-color: #f0b90b !important;
+            outline: none;
+        }
+
+        /* 체크박스 스타일 */
+        input[type="checkbox"] {
+            accent-color: #f0b90b;
+            background: #2b3139 !important;
+            border: 1px solid #3b424b !important;
+            appearance: none;
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            cursor: pointer;
+            position: relative;
+        }
+        input[type="checkbox"]:checked {
+            background: #f0b90b !important;
+            border-color: #f0b90b !important;
+        }
+        input[type="checkbox"]:checked::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #0b0e11;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* 로그 영역 */
+        .bg-gray-900 {
+            background: #0b0e11 !important;
+            border: 1px solid #2b3139;
+        }
+
+        /* 백필 옵션 박스 */
+        .bg-gray-50 {
+            background: #2b3139 !important;
+        }
+        .border-gray-200 {
+            border-color: #3b424b !important;
+        }
+
+        /* 헤더 스타일 */
+        h1 {
+            color: #f0b90b !important;
+            letter-spacing: -0.02em;
+        }
+
+        /* ============================================================
+           Toast (top-right)
+           ============================================================ */
+        #toast-container {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            pointer-events: auto;
+            min-width: 280px;
+            max-width: min(420px, calc(100vw - 32px));
+            border-radius: 12px;
+            border: 1px solid #2b3139;
+            background: #1e2329;
+            color: #eaecef;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+            transform: translateY(-6px);
+            opacity: 0;
+            transition: transform 180ms ease, opacity 180ms ease;
+        }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .toast .toast-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+        .toast .toast-message {
+            font-size: 0.82rem;
+            color: #c7ccd4;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+        .toast .toast-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            font-size: 16px;
+            flex: 0 0 auto;
+        }
+        .toast.info .toast-icon { background: rgba(30, 128, 255, 0.18); color: #1e80ff; }
+        .toast.success .toast-icon { background: rgba(14, 203, 129, 0.18); color: #0ecb81; }
+        .toast.error .toast-icon { background: rgba(246, 70, 93, 0.18); color: #f6465d; }
+        .toast.warn .toast-icon { background: rgba(240, 185, 11, 0.18); color: #f0b90b; }
+        .toast .toast-close {
+            background: transparent;
+            border: 0;
+            color: #848e9c;
+            padding: 6px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .toast .toast-close:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: #eaecef;
+        }
+
+        /* ============================================================
+           UI compact polish (do NOT override tailwind utilities)
+           ============================================================ */
+        .pm-card {
+            border-radius: 14px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+            border: 1px solid #2b3139;
+        }
+        .pm-card:hover {
+            box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+        }
+        .pm-icon {
+            font-size: 1.35rem;
+            line-height: 1;
+        }
+
+        /* 스크롤바 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e2329;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2b3139;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3b424b;
+        }
+
+        /* 모바일 반응형 */
+        .mobile-menu-btn {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px !important;
+            }
+            h1 {
+                font-size: 1.5rem !important;
+            }
+            .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-5 {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-3 {
+                grid-template-columns: 1fr !important;
+            }
+            .pm-card {
+                border-radius: 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-5 {
+                grid-template-columns: 1fr 1fr !important;
+                gap: 8px !important;
+            }
+            .gap-4 {
+                gap: 8px !important;
+            }
+            .gap-6 {
+                gap: 12px !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark-primary">
+    <!-- Toast container -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">프로세스 매니저</h1>
+            <p class="text-gray-600">서버 프로그램을 웹에서 시작/중지/모니터링합니다</p>
+        </div>
+
+        <!-- System Info -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+            <div class="bg-white pm-card p-5">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">CPU 사용률</p>
+                        <p class="text-3xl font-bold text-blue-600" id="cpu-usage">-</p>
+                    </div>
+                    <div class="pm-icon">💻</div>
+                </div>
+            </div>
+            
+            <div class="bg-white pm-card p-5">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">메모리 사용률</p>
+                        <p class="text-3xl font-bold text-green-600" id="memory-usage">-</p>
+                    </div>
+                    <div class="pm-icon">🧠</div>
+                </div>
+            </div>
+            
+            <div class="bg-white pm-card p-5" id="gpu-card" style="display: none;">
+                <div class="flex items-center justify-between">
+                    <div class="w-full">
+                        <p class="text-gray-600 text-sm">GPU 사용률</p>
+                        <p class="text-2xl font-bold text-purple-600" id="gpu-usage">-</p>
+                        <p class="text-xs text-gray-500 mt-1" id="gpu-memory">메모리: -</p>
+                        <p class="text-xs text-gray-500" id="gpu-temp">온도: -</p>
+                    </div>
+                    <div class="pm-icon">🎮</div>
+                </div>
+            </div>
+            
+            <div class="bg-white pm-card p-5">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">디스크 사용률</p>
+                        <p class="text-3xl font-bold text-orange-600" id="disk-usage">-</p>
+                    </div>
+                    <div class="pm-icon">💾</div>
+                </div>
+            </div>
+            
+            <div class="bg-white pm-card p-5">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">DB 연결 수</p>
+                        <p class="text-3xl font-bold text-red-600" id="db-connections">-</p>
+                        <p class="text-xs text-gray-500 mt-1" id="db-connections-detail">활성: -</p>
+                    </div>
+                    <div class="pm-icon">🔌</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processes Grid -->
+        <div id="processes-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- 프로세스 카드가 여기에 동적으로 추가됩니다 -->
+        </div>
+        
+        <!-- Server Logs -->
+        <div class="bg-white pm-card p-5">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">서버 로그</h2>
+                <button onclick="clearLogs()" class="pm-btn pm-btn--sm pm-btn--ghost">
+                    지우기
+                </button>
+            </div>
+            
+            <div id="server-logs" class="bg-gray-900 rounded p-4 h-96 overflow-y-auto font-mono text-xs">
+                <div class="text-center text-gray-500 py-8">서버 로그 연결 중...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API 베이스 URL
+        const API_BASE = '';
+
+        // 프로세스 목록 로드
+        async function loadProcesses() {
+            try {
+                const response = await fetch(`${API_BASE}/api/processes`);
+                const processes = await response.json();
+                
+                renderProcesses(processes);
+            } catch (error) {
+                console.error('프로세스 로드 실패:', error);
+            }
+        }
+
+        // 프로세스 렌더링
+        function renderProcesses(processes) {
+            const container = document.getElementById('processes-container');
+
+            // 기존 입력값 저장
+            const savedInputs = {};
+            const savedSelects = {};
+            const savedCheckboxes = {};
+
+            // 텍스트 입력 저장
+            container.querySelectorAll('input[type="text"]').forEach(input => {
+                savedInputs[input.id] = input.value;
+            });
+
+            // 셀렉트 저장
+            container.querySelectorAll('select').forEach(select => {
+                savedSelects[select.id] = select.value;
+            });
+
+            // 체크박스 저장
+            container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                savedCheckboxes[checkbox.id] = checkbox.checked;
+            });
+
+            container.innerHTML = '';
+
+            processes.forEach(proc => {
+                const card = createProcessCard(proc);
+                container.appendChild(card);
+            });
+
+            // DOM 업데이트 후 입력값 복원 (requestAnimationFrame 사용)
+            requestAnimationFrame(() => {
+                // 텍스트 입력 복원
+                Object.keys(savedInputs).forEach(inputId => {
+                    const input = document.getElementById(inputId);
+                    if (input && savedInputs[inputId]) {
+                        input.value = savedInputs[inputId];
+                    }
+                });
+
+                // 셀렉트 복원
+                Object.keys(savedSelects).forEach(selectId => {
+                    const select = document.getElementById(selectId);
+                    if (select && savedSelects[selectId]) {
+                        select.value = savedSelects[selectId];
+                    }
+                });
+
+                // 체크박스 복원
+                Object.keys(savedCheckboxes).forEach(checkboxId => {
+                    const checkbox = document.getElementById(checkboxId);
+                    if (checkbox) {
+                        checkbox.checked = savedCheckboxes[checkboxId];
+                    }
+                });
+            });
+        }
+
+        // 프로세스 카드 생성
+        function createProcessCard(proc) {
+            const card = document.createElement('div');
+            // tradeBot (전체) 카드는 회색 배경
+            if (proc.process_id === 'tradebot_all') {
+                card.className = 'pm-card-gray pm-card p-5 transition-all';
+            } else {
+                card.className = 'bg-white pm-card p-5 transition-all';
+            }
+
+            const statusClass = `status-${proc.status}`;
+            const statusText = proc.status === 'running' ? '실행중' :
+                              proc.status === 'stopped' ? '중지됨' : '오류';
+
+            // 년도 옵션 생성 (2020-2025)
+            const currentYear = new Date().getFullYear();
+            let yearOptions = '<option value="">전체</option>';
+            for (let year = currentYear; year >= 2020; year--) {
+                yearOptions += `<option value="${year}">${year}년</option>`;
+            }
+
+            // 월 옵션 생성 (1-12)
+            let monthOptions = '<option value="">전체</option>';
+            for (let month = 1; month <= 12; month++) {
+                monthOptions += `<option value="${month}">${month}월</option>`;
+            }
+
+            // 타임프레임 옵션
+            const timeframes = ['15m', '30m', '1h', '4h', '1d'];
+
+            // 웹서비스 링크 생성 (포트가 있고 실행 중일 때)
+            let webLink = '';
+            if (proc.port && proc.status === 'running') {
+                // 백테스트 서버는 http로, 나머지는 https로
+                const protocol = proc.process_id === 'backtest' ? 'http' : 'https';
+                const url = `${protocol}://localhost:${proc.port}`;
+                webLink = `
+                    <div class="mb-3">
+                        <a href="${url}" 
+                           target="_blank" 
+                           rel="noopener noreferrer"
+                           class="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 hover:border-blue-500/50 rounded-lg transition-all">
+                            <span>🌐</span>
+                            <span>웹서비스 열기</span>
+                            <span class="text-xs opacity-70">(포트 ${proc.port})</span>
+                        </a>
+                    </div>
+                `;
+            }
+
+            card.innerHTML = `
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="text-2xl">${proc.icon}</div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800">${proc.name}</h3>
+                            <p class="text-sm text-gray-600">${proc.description}</p>
+                        </div>
+                    </div>
+                    <span class="status-badge ${statusClass} ${proc.status === 'running' ? 'animate-pulse' : ''}">
+                        ${statusText}
+                    </span>
+                </div>
+                ${webLink}
+
+                ${proc.status === 'running' ? `
+                    <div class="mb-4 space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">PID:</span>
+                            <span class="font-mono font-bold">${proc.pid}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">CPU:</span>
+                            <span class="font-bold text-blue-600">${proc.cpu_percent}%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">메모리:</span>
+                            <span class="font-bold text-green-600">${proc.memory_mb} MB</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">가동 시간:</span>
+                            <span class="font-mono">${proc.uptime}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">시작:</span>
+                            <span class="font-mono text-xs">${proc.started_at}</span>
+                        </div>
+                        ${proc.current_symbols ? `
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">심볼:</span>
+                            <span class="font-mono text-xs text-purple-600">${proc.current_symbols}</span>
+                        </div>
+                        ` : ''}
+                        ${proc.current_backfill_options ? `
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">백필 설정:</span>
+                            <span class="font-mono text-xs text-indigo-600">
+                                ${proc.current_backfill_options.start_year || '전체'}년
+                                ${proc.current_backfill_options.start_month || '전체'}월 /
+                                ${proc.current_backfill_options.timeframes || '전체TF'}
+                            </span>
+                        </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
+
+                ${proc.symbol_option && proc.status === 'stopped' ? `
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            심볼 필터 (선택사항)
+                        </label>
+                        <input type="text"
+                               id="symbols-${proc.process_id}"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="예: BTCUSDT,ETHUSDT,BNBUSDT">
+                        <p class="text-xs text-gray-500 mt-1">쉼표로 구분하여 입력하세요</p>
+                    </div>
+                ` : ''}
+
+                ${proc.backfill_options && proc.status === 'stopped' ? `
+                    <div class="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            📅 백필 옵션
+                        </label>
+
+                        <!-- 년도/월 선택 -->
+                        <div class="grid grid-cols-2 gap-2 mb-2">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">시작 년도</label>
+                                <select id="backfill-year-${proc.process_id}"
+                                        class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500">
+                                    ${yearOptions}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">시작 월</label>
+                                <select id="backfill-month-${proc.process_id}"
+                                        class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500">
+                                    ${monthOptions}
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 타임프레임 선택 -->
+                        <div class="mb-2">
+                            <label class="block text-xs text-gray-600 mb-1">타임프레임 (복수 선택 가능)</label>
+                            <div class="flex flex-wrap gap-2">
+                                ${timeframes.map(tf => `
+                                    <label class="inline-flex items-center">
+                                        <input type="checkbox"
+                                               id="backfill-tf-${proc.process_id}-${tf}"
+                                               class="backfill-tf-${proc.process_id} form-checkbox h-4 w-4 text-blue-600 rounded"
+                                               value="${tf}" checked>
+                                        <span class="ml-1 text-sm text-gray-700">${tf}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <!-- run_ingest 옵션 -->
+                        <div class="flex items-center mt-2">
+                            <input type="checkbox"
+                                   id="backfill-ingest-${proc.process_id}"
+                                   class="form-checkbox h-4 w-4 text-green-600 rounded"
+                                   checked>
+                            <label class="ml-2 text-sm text-gray-700">
+                                최신 데이터 먼저 수집 (run_ingest)
+                            </label>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">체크하면 백필 전에 최신 데이터를 먼저 가져옵니다</p>
+                    </div>
+                ` : ''}
+
+                <div class="flex gap-2 justify-end">
+                    ${proc.status === 'running' ? `
+                        <button onclick="stopProcess('${proc.process_id}')"
+                                class="pm-btn pm-btn--sm pm-btn--danger">
+                            중지
+                        </button>
+                        <button onclick="restartProcess('${proc.process_id}')"
+                                class="pm-btn pm-btn--sm pm-btn--primary">
+                            재시작
+                        </button>
+                    ` : `
+                        <button onclick="startProcess('${proc.process_id}', ${proc.symbol_option}, ${proc.backfill_options || false})"
+                                class="pm-btn pm-btn--sm pm-btn--success">
+                            시작
+                        </button>
+                    `}
+                </div>
+            `;
+
+            return card;
+        }
+
+        // 프로세스 시작
+        async function startProcess(processId, hasSymbolOption = false, hasBackfillOptions = false) {
+            try {
+                let body = {};
+
+                // 심볼 옵션이 있으면 입력값 가져오기
+                if (hasSymbolOption) {
+                    const symbolInput = document.getElementById(`symbols-${processId}`);
+                    if (symbolInput && symbolInput.value.trim()) {
+                        body.symbols = symbolInput.value.trim();
+                    }
+                }
+
+                // 백필 옵션이 있으면 입력값 가져오기
+                if (hasBackfillOptions) {
+                    // 년도
+                    const yearSelect = document.getElementById(`backfill-year-${processId}`);
+                    if (yearSelect && yearSelect.value) {
+                        body.start_year = parseInt(yearSelect.value);
+                    }
+
+                    // 월
+                    const monthSelect = document.getElementById(`backfill-month-${processId}`);
+                    if (monthSelect && monthSelect.value) {
+                        body.start_month = parseInt(monthSelect.value);
+                    }
+
+                    // 타임프레임 (체크된 것만)
+                    const tfCheckboxes = document.querySelectorAll(`.backfill-tf-${processId}:checked`);
+                    if (tfCheckboxes.length > 0) {
+                        const selectedTfs = Array.from(tfCheckboxes).map(cb => cb.value);
+                        body.timeframes = selectedTfs.join(',');
+                    }
+
+                    // run_ingest 여부
+                    const ingestCheckbox = document.getElementById(`backfill-ingest-${processId}`);
+                    body.run_ingest = ingestCheckbox ? ingestCheckbox.checked : true;
+                }
+
+                const response = await fetch(`${API_BASE}/api/processes/${processId}/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showNotification(result.message, 'success');
+                    setTimeout(loadProcesses, 500);
+                } else {
+                    showNotification(result.detail || '시작 실패', 'error');
+                }
+            } catch (error) {
+                showNotification('시작 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 프로세스 중지
+        async function stopProcess(processId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/processes/${processId}/stop`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showNotification(result.message, 'success');
+                    setTimeout(loadProcesses, 500);
+                } else {
+                    showNotification(result.detail || '중지 실패', 'error');
+                }
+            } catch (error) {
+                showNotification('중지 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 프로세스 재시작
+        async function restartProcess(processId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/processes/${processId}/restart`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showNotification(result.message, 'success');
+                    setTimeout(loadProcesses, 1000);
+                } else {
+                    showNotification(result.detail || '재시작 실패', 'error');
+                }
+            } catch (error) {
+                showNotification('재시작 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 시스템 정보 로드
+        async function loadSystemInfo() {
+            try {
+                const response = await fetch(`${API_BASE}/api/system`);
+                const system = await response.json();
+                
+                document.getElementById('cpu-usage').textContent = system.cpu_percent.toFixed(1) + '%';
+                document.getElementById('memory-usage').textContent = system.memory_percent.toFixed(1) + '%';
+                document.getElementById('disk-usage').textContent = system.disk_percent.toFixed(1) + '%';
+                
+                // DB 연결 수
+                const dbConnections = system.db_connections || 0;
+                const dbActive = system.db_connections_active || 0;
+                const dbMax = system.db_connections_max || 0;
+                document.getElementById('db-connections').textContent = `${dbConnections}/${dbMax}`;
+                document.getElementById('db-connections-detail').textContent = `활성: ${dbActive}`;
+                
+                // GPU 정보 (있으면 표시)
+                const gpuCard = document.getElementById('gpu-card');
+                if (system.gpu_available) {
+                    gpuCard.style.display = 'block';
+                    document.getElementById('gpu-usage').textContent = system.gpu_utilization.toFixed(1) + '%';
+                    
+                    const gpuMemUsedGB = (system.gpu_memory_used_mb / 1024).toFixed(1);
+                    const gpuMemTotalGB = (system.gpu_memory_total_mb / 1024).toFixed(1);
+                    document.getElementById('gpu-memory').textContent = 
+                        `메모리: ${gpuMemUsedGB}GB / ${gpuMemTotalGB}GB (${system.gpu_memory_percent.toFixed(1)}%)`;
+                    
+                    document.getElementById('gpu-temp').textContent = `온도: ${system.gpu_temperature}℃`;
+                    
+                    // GPU 이름을 툴팁으로 표시 (선택사항)
+                    gpuCard.title = system.gpu_name;
+                } else {
+                    gpuCard.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('시스템 정보 로드 실패:', error);
+            }
+        }
+
+        // 토스트 알림 표시
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const normalizedType = (type || 'info').toLowerCase();
+            const toastType =
+                normalizedType === 'success' ? 'success' :
+                normalizedType === 'error' ? 'error' :
+                normalizedType === 'warning' ? 'warn' :
+                'info';
+
+            const icon =
+                toastType === 'success' ? '✓' :
+                toastType === 'error' ? '!' :
+                toastType === 'warn' ? '!' :
+                'i';
+
+            const title =
+                toastType === 'success' ? '완료' :
+                toastType === 'error' ? '오류' :
+                toastType === 'warn' ? '경고' :
+                '알림';
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${toastType}`;
+            toast.setAttribute('role', 'status');
+
+            const safeMessage = String(message ?? '');
+            toast.innerHTML = `
+                <div class="flex items-start gap-3 p-4">
+                    <div class="toast-icon">${icon}</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="toast-title">${title}</div>
+                        <div class="toast-message mt-1">${escapeHtml(safeMessage)}</div>
+                    </div>
+                    <button class="toast-close" aria-label="닫기">✕</button>
+                </div>
+            `;
+
+            const closeBtn = toast.querySelector('.toast-close');
+            const removeToast = () => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 200);
+            };
+            if (closeBtn) closeBtn.addEventListener('click', removeToast);
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add('show'));
+
+            const timeoutMs = toastType === 'error' ? 6000 : 3200;
+            setTimeout(removeToast, timeoutMs);
+        }
+
+        // XSS 방지용 HTML escape
+        function escapeHtml(unsafe) {
+            return String(unsafe ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        // 사용자가 입력 중인지 확인
+        function isUserTyping() {
+            const activeElement = document.activeElement;
+            // input, textarea, select 등에 포커스가 있으면 입력 중으로 판단
+            return activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.tagName === 'SELECT'
+            );
+        }
+        
+        // 서버 로그
+        let serverLogs = [];
+        let logsContainer = null;
+        
+        // 로그 WebSocket 연결
+        function connectLogsWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${window.location.host}/ws/logs`);
+            
+            ws.onopen = () => {
+                console.log('로그 WebSocket 연결 성공');
+                if (logsContainer) {
+                    logsContainer.innerHTML = '<div class="text-gray-500 text-center py-4">로그 대기 중...</div>';
+                }
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const log = JSON.parse(event.data);
+                    
+                    // ping 메시지 무시
+                    if (log.type === 'ping') return;
+                    
+                    // 로그 추가 (최대 300개 유지)
+                    serverLogs.push(log);
+                    if (serverLogs.length > 300) {
+                        serverLogs.shift();
+                    }
+                    
+                    // 로그 렌더링
+                    renderLogs();
+                    
+                } catch (error) {
+                    console.error('로그 파싱 실패:', error);
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('로그 WebSocket 연결 끊김');
+                
+                // 재연결
+                setTimeout(() => connectLogsWebSocket(), 5000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('로그 WebSocket 에러:', error);
+            };
+        }
+        
+        // 로그 렌더링
+        function renderLogs() {
+            if (!logsContainer) return;
+            
+            // 스크롤 위치 저장
+            const wasScrolledToBottom = logsContainer.scrollHeight - logsContainer.clientHeight <= logsContainer.scrollTop + 1;
+            
+            // 로그 렌더링 (최근 100개만)
+            const recentLogs = serverLogs.slice(-100);
+            logsContainer.innerHTML = recentLogs.map(log => {
+                const time = new Date(log.timestamp).toLocaleTimeString();
+                let colorClass = 'text-gray-400';
+                
+                if (log.level === 'ERROR') colorClass = 'text-red-400';
+                else if (log.level === 'WARNING') colorClass = 'text-yellow-400';
+                else if (log.level === 'INFO') colorClass = 'text-blue-300';
+                else if (log.level === 'DEBUG') colorClass = 'text-gray-500';
+                
+                return `<div class="${colorClass}"><span class="text-gray-600">${time}</span> ${log.message}</div>`;
+            }).join('');
+            
+            // 자동 스크롤 (맨 아래에 있었으면)
+            if (wasScrolledToBottom) {
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+            }
+        }
+        
+        // 로그 지우기
+        function clearLogs() {
+            serverLogs = [];
+            if (logsContainer) {
+                logsContainer.innerHTML = '<div class="text-gray-500 text-center py-4">로그가 지워졌습니다.</div>';
+            }
+        }
+
+        // 초기 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            logsContainer = document.getElementById('server-logs');
+            
+            loadProcesses();
+            loadSystemInfo();
+            connectLogsWebSocket();  // 로그 WebSocket 연결
+            
+            // 3초마다 자동 갱신 (입력 중이 아닐 때만)
+            setInterval(() => {
+                if (!isUserTyping()) {
+                    loadProcesses();
+                    loadSystemInfo();
+                } else {
+                    console.log('[Auto-refresh] Skipped - user is typing');
+                }
+            }, 3000);
+        });
+    </script>
+</body>
+</html>

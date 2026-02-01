@@ -1,0 +1,310 @@
+# ============================================================
+# HTML 파일 분리 버전 - 프로젝트 구조 및 설치 가이드
+# ============================================================
+
+# ============================================================
+# 프로젝트 구조
+# ============================================================
+
+crypto-trading/
+│
+├── dashboard_api_v2.py          # FastAPI 서버 (Python 코드만)
+├── config.yaml                  # 설정 파일
+├── requirements_fastapi.txt     # 패키지 목록
+│
+├── templates/                   # HTML 템플릿 폴더
+│   └── index.html              # 메인 대시보드 HTML
+│
+├── static/                      # 정적 파일 폴더 (선택사항)
+│   ├── css/                    # 커스텀 CSS
+│   │   └── custom.css
+│   ├── js/                     # 커스텀 JavaScript
+│   │   └── custom.js
+│   └── images/                 # 이미지 파일
+│       └── logo.png
+│
+└── logs/                        # 로그 파일
+
+
+# ============================================================
+# 설치 방법
+# ============================================================
+
+# 1. 필수 패키지 설치
+pip install fastapi uvicorn[standard] jinja2 sqlalchemy psycopg2-binary pyyaml pandas
+
+# 또는
+pip install -r requirements_fastapi.txt
+
+
+# 2. 폴더 생성
+mkdir templates
+mkdir static
+mkdir static/css
+mkdir static/js
+mkdir static/images
+
+
+# 3. 파일 배치
+# - dashboard_api_v2.py를 프로젝트 루트에 배치
+# - index.html을 templates/ 폴더에 배치
+
+
+# ============================================================
+# 실행 방법
+# ============================================================
+
+# 기본 실행
+python dashboard_api_v2.py
+
+# 포트 변경
+python dashboard_api_v2.py --port 8080
+
+# 개발 모드 (자동 재로드)
+python dashboard_api_v2.py --reload
+
+# 접속
+# http://localhost:8001
+
+
+# ============================================================
+# 장점
+# ============================================================
+
+✅ Python 코드와 HTML 완전 분리
+   - dashboard_api_v2.py: API 로직만
+   - index.html: UI와 프론트엔드 로직만
+
+✅ 유지보수 용이
+   - HTML 수정 시 Python 파일 건드릴 필요 없음
+   - 디자이너가 HTML만 수정 가능
+
+✅ 확장 가능
+   - 여러 페이지 추가 가능 (about.html, settings.html 등)
+   - 정적 파일(CSS, JS, 이미지) 별도 관리
+
+✅ 템플릿 엔진 활용
+   - Jinja2로 동적 데이터 주입 가능
+   - 코드 재사용성 향상
+
+
+# ============================================================
+# HTML 수정 방법
+# ============================================================
+
+templates/index.html 파일만 수정하면 됩니다:
+
+1. 디자인 변경
+   - <style> 태그 내부의 CSS 수정
+   - Tailwind CSS 클래스 변경
+
+2. 레이아웃 변경
+   - HTML 구조 수정
+   - 차트 위치 변경
+
+3. 기능 추가
+   - <script> 태그 내부의 JavaScript 수정
+   - 새로운 API 엔드포인트 호출
+
+
+# ============================================================
+# 커스텀 CSS 추가 (선택사항)
+# ============================================================
+
+# static/css/custom.css 파일 생성
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+}
+
+.custom-card {
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+}
+
+# templates/index.html의 <head>에 추가
+<link rel="stylesheet" href="/static/css/custom.css">
+
+
+# ============================================================
+# 커스텀 JavaScript 추가 (선택사항)
+# ============================================================
+
+# static/js/custom.js 파일 생성
+function customFunction() {
+    console.log('Custom function called');
+}
+
+# templates/index.html의 </body> 전에 추가
+<script src="/static/js/custom.js"></script>
+
+
+# ============================================================
+# 여러 페이지 추가
+# ============================================================
+
+# templates/about.html 생성
+<!DOCTYPE html>
+<html>
+<head>
+    <title>About - Crypto Dashboard</title>
+</head>
+<body>
+    <h1>About Page</h1>
+</body>
+</html>
+
+# dashboard_api_v2.py에 라우트 추가
+@app.get("/about", response_class=HTMLResponse)
+async def about(request: Request):
+    return templates.TemplateResponse("about.html", {"request": request})
+
+
+# ============================================================
+# Jinja2 템플릿 기능 활용
+# ============================================================
+
+# dashboard_api_v2.py 수정
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    # 서버에서 데이터 전달
+    data = {
+        "request": request,
+        "app_name": "Crypto Trading Dashboard",
+        "version": "1.0.0",
+        "user": "Admin"
+    }
+    return templates.TemplateResponse("index.html", data)
+
+# templates/index.html에서 사용
+<h1>{{ app_name }}</h1>
+<p>Version: {{ version }}</p>
+<p>User: {{ user }}</p>
+
+
+# ============================================================
+# API 엔드포인트 추가
+# ============================================================
+
+# dashboard_api_v2.py에 새로운 엔드포인트 추가
+@app.get("/api/custom-stats")
+async def get_custom_stats():
+    # 커스텀 통계 로직
+    return {"data": "custom stats"}
+
+# templates/index.html에서 호출
+async function fetchCustomStats() {
+    const response = await fetch('/api/custom-stats');
+    const data = await response.json();
+    console.log(data);
+}
+
+
+# ============================================================
+# 프로덕션 배포
+# ============================================================
+
+# 1. 정적 파일 최적화
+#    - CSS/JS 파일 압축
+#    - 이미지 최적화
+
+# 2. 환경 변수 사용
+#    - config.yaml 대신 환경 변수
+#    - 민감한 정보 보호
+
+# 3. Nginx 리버스 프록시
+#    - 정적 파일은 Nginx가 직접 서빙
+#    - API는 FastAPI로 프록시
+
+# 4. HTTPS 설정
+#    - Let's Encrypt SSL 인증서
+#    - Nginx에서 SSL 처리
+
+
+# ============================================================
+# 예시: 개선된 프로젝트 구조 (대규모)
+# ============================================================
+
+crypto-trading/
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py                 # FastAPI 앱
+│   ├── config.py               # 설정 관리
+│   ├── database.py             # DB 연결
+│   │
+│   ├── api/                    # API 라우터
+│   │   ├── __init__.py
+│   │   ├── stats.py
+│   │   ├── signals.py
+│   │   └── charts.py
+│   │
+│   ├── models/                 # 데이터 모델
+│   │   ├── __init__.py
+│   │   ├── signal.py
+│   │   └── outcome.py
+│   │
+│   └── services/               # 비즈니스 로직
+│       ├── __init__.py
+│       ├── stats_service.py
+│       └── signal_service.py
+│
+├── templates/
+│   ├── base.html               # 베이스 템플릿
+│   ├── index.html              # 메인 페이지
+│   ├── signals.html            # 신호 페이지
+│   └── stats.html              # 통계 페이지
+│
+├── static/
+│   ├── css/
+│   │   ├── main.css
+│   │   └── theme.css
+│   ├── js/
+│   │   ├── main.js
+│   │   ├── charts.js
+│   │   └── utils.js
+│   └── images/
+│       └── logo.png
+│
+├── tests/                      # 테스트
+│   ├── test_api.py
+│   └── test_services.py
+│
+├── requirements.txt
+├── README.md
+└── .env                        # 환경 변수
+
+
+# ============================================================
+# 트러블슈팅
+# ============================================================
+
+# templates 폴더를 찾을 수 없다는 오류:
+# → dashboard_api_v2.py와 같은 위치에 templates 폴더 생성
+
+# 템플릿 렌더링 오류:
+# → pip install jinja2 확인
+
+# 정적 파일이 로드되지 않음:
+# → static 폴더 경로 확인
+# → app.mount("/static", ...) 코드 확인
+
+# API 호출 CORS 오류:
+# → CORSMiddleware 설정 확인
+
+
+# ============================================================
+# 빠른 시작
+# ============================================================
+
+# 1. 폴더 생성
+mkdir templates
+
+# 2. index.html을 templates/에 복사
+
+# 3. 실행
+python dashboard_api_v2.py
+
+# 4. 접속
+# http://localhost:8001
+
+# 완료!

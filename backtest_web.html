@@ -1,0 +1,2812 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strategy Backtester</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'dark-primary': '#0b0e11',
+                        'dark-secondary': '#1e2329',
+                        'dark-tertiary': '#2b3139',
+                        'dark-border': '#2b3139',
+                        'text-primary': '#eaecef',
+                        'text-secondary': '#848e9c',
+                        'text-muted': '#5e6673',
+                        'accent-green': '#0ecb81',
+                        'accent-red': '#f6465d',
+                        'accent-yellow': '#f0b90b',
+                        'accent-blue': '#1e80ff',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Toast 슬라이드 인 애니메이션 */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .animate-slide-in {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+
+        /* 다크 테마 오버라이드 */
+        body {
+            background: #0b0e11 !important;
+            color: #eaecef;
+            font-size: 14.4px;  /* 기본 16px에서 90% 축소 */
+        }
+
+        /* 90% 축소 스타일 */
+        html {
+            font-size: 90%;
+        }
+
+        /* 패딩/마진 축소 (90%) */
+        .p-8 { padding: 1.44rem !important; }
+        .p-6 { padding: 1.08rem !important; }
+        .p-5 { padding: 0.9rem !important; }
+        .p-4 { padding: 0.72rem !important; }
+        .p-3 { padding: 0.54rem !important; }
+        .p-2 { padding: 0.36rem !important; }
+        .px-6 { padding-left: 1.08rem !important; padding-right: 1.08rem !important; }
+        .px-4 { padding-left: 0.72rem !important; padding-right: 0.72rem !important; }
+        .px-3 { padding-left: 0.54rem !important; padding-right: 0.54rem !important; }
+        .py-4 { padding-top: 0.72rem !important; padding-bottom: 0.72rem !important; }
+        .py-3 { padding-top: 0.54rem !important; padding-bottom: 0.54rem !important; }
+        .py-2 { padding-top: 0.36rem !important; padding-bottom: 0.36rem !important; }
+        .mb-8 { margin-bottom: 1.44rem !important; }
+        .mb-6 { margin-bottom: 1.08rem !important; }
+        .mb-4 { margin-bottom: 0.72rem !important; }
+        .gap-8 { gap: 1.44rem !important; }
+        .gap-6 { gap: 1.08rem !important; }
+        .gap-4 { gap: 0.72rem !important; }
+        .gap-3 { gap: 0.54rem !important; }
+        .gap-2 { gap: 0.36rem !important; }
+        .space-y-4 > * + * { margin-top: 0.72rem !important; }
+        .space-y-3 > * + * { margin-top: 0.54rem !important; }
+        .space-y-2 > * + * { margin-top: 0.36rem !important; }
+
+        /* 폰트 크기 축소 (90%) */
+        .text-3xl { font-size: 1.7rem !important; }
+        .text-2xl { font-size: 1.35rem !important; }
+        .text-xl { font-size: 1.13rem !important; }
+        .text-lg { font-size: 1.01rem !important; }
+        .text-base { font-size: 0.9rem !important; }
+        .text-sm { font-size: 0.79rem !important; }
+        .text-xs { font-size: 0.68rem !important; }
+
+        /* 버튼/입력 높이 축소 */
+        input, select, button {
+            font-size: 0.9rem !important;
+        }
+
+        /* 배경색 오버라이드 */
+        .bg-gray-100, .bg-gray-50 {
+            background: #0b0e11 !important;
+        }
+        .bg-white {
+            background: #1e2329 !important;
+            border: 1px solid #2b3139;
+        }
+
+        /* 전략 선택 내부 항목 - 선택됨 */
+        .border-blue-600 {
+            border-color: #f0b90b !important;
+        }
+        .border-blue-400 {
+            border-color: #f0b90b !important;
+        }
+        .bg-blue-50 {
+            background: rgba(240, 185, 11, 0.15) !important;
+        }
+        .border-l-4.border-blue-600 {
+            border-left-color: #f0b90b !important;
+        }
+
+        /* 전략 선택 내부 항목 - 선택 안됨 */
+        .border-gray-200 {
+            border-color: #3b424b !important;
+        }
+        .border-2 {
+            border-color: #3b424b;
+        }
+
+        /* 심볼 선택 영역 테두리 */
+        .max-h-\[500px\].overflow-y-auto.border.rounded-lg {
+            border-color: #3b424b !important;
+        }
+
+        /* 심볼 선택 항목 - 선택됨 */
+        .border-l-4.border-blue-600.bg-blue-50 {
+            border-left-color: #f0b90b !important;
+            background: rgba(240, 185, 11, 0.15) !important;
+        }
+
+        /* 심볼 목록 배경 (홀수/짝수 줄) */
+        .max-h-\[500px\] .bg-gray-50 {
+            background: #1e2329 !important;
+        }
+
+        /* 텍스트 색상 */
+        .text-gray-800, .text-gray-700, .text-gray-900 {
+            color: #eaecef !important;
+        }
+        .text-gray-600, .text-gray-500 {
+            color: #848e9c !important;
+        }
+        .text-gray-400 {
+            color: #5e6673 !important;
+        }
+
+        /* 그라데이션 헤더 - 노란색 테마 */
+        .bg-gradient-to-r.from-blue-600.to-purple-600 {
+            background: linear-gradient(to right, #1e2329, #2b3139) !important;
+            border-bottom: 2px solid #f0b90b;
+        }
+        .bg-gradient-to-r.from-purple-600.to-pink-600 {
+            background: linear-gradient(to right, #1e2329, #2b3139) !important;
+            border-bottom: 2px solid #f0b90b;
+        }
+
+        /* 버튼 스타일 */
+        .bg-blue-600, .bg-blue-500 {
+            background: #1e80ff !important;
+        }
+        .hover\:bg-blue-700:hover {
+            background: #1a6dd4 !important;
+        }
+        .bg-green-600, .bg-green-500 {
+            background: #0ecb81 !important;
+        }
+        .hover\:bg-green-700:hover {
+            background: #0ba86a !important;
+        }
+        .bg-red-600, .bg-red-500 {
+            background: #f6465d !important;
+        }
+        .hover\:bg-red-700:hover {
+            background: #d4374d !important;
+        }
+        .bg-purple-600, .bg-purple-500 {
+            background: #a855f7 !important;
+        }
+        .hover\:bg-purple-700:hover {
+            background: #9333ea !important;
+        }
+        .bg-yellow-500 {
+            background: #c99a09 !important;
+        }
+        .bg-yellow-500.text-black {
+            color: #0b0e11 !important;
+        }
+        .hover\:bg-yellow-600:hover {
+            background: #a88008 !important;
+        }
+
+        /* 비활성화 버튼 */
+        .bg-gray-700 {
+            background: #2b3139 !important;
+        }
+        .bg-gray-700.text-gray-500 {
+            color: #5e6673 !important;
+        }
+
+        /* 입력 필드 */
+        input, select, textarea {
+            background: #2b3139 !important;
+            border: 1px solid #2b3139 !important;
+            color: #eaecef !important;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: #f0b90b !important;
+            outline: none;
+        }
+
+        /* 체크박스 스타일 */
+        input[type="checkbox"] {
+            accent-color: #f0b90b;
+            background: #2b3139 !important;
+            border: 1px solid #3b424b !important;
+            appearance: none;
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            cursor: pointer;
+            position: relative;
+        }
+        input[type="checkbox"]:checked {
+            background: #f0b90b !important;
+            border-color: #f0b90b !important;
+        }
+        input[type="checkbox"]:checked::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #0b0e11;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* 프로그레스바 */
+        .bg-gray-200 {
+            background: #2b3139 !important;
+        }
+        .bg-blue-100 {
+            background: rgba(30, 128, 255, 0.2) !important;
+        }
+        .text-blue-800 {
+            color: #1e80ff !important;
+        }
+        .bg-purple-50, .bg-purple-100 {
+            background: rgba(168, 85, 247, 0.1) !important;
+        }
+        .bg-purple-200 {
+            background: rgba(168, 85, 247, 0.2) !important;
+        }
+        .border-purple-200 {
+            border-color: rgba(168, 85, 247, 0.3) !important;
+        }
+        .bg-blue-50 {
+            background: rgba(30, 128, 255, 0.1) !important;
+        }
+
+        /* 호버 효과 */
+        .hover\:bg-gray-100:hover {
+            background: #2b3139 !important;
+        }
+        .hover\:bg-gray-50:hover {
+            background: #1e2329 !important;
+        }
+        .bg-white\/20 {
+            background: rgba(255, 255, 255, 0.1) !important;
+        }
+        .hover\:bg-white\/30:hover {
+            background: rgba(255, 255, 255, 0.15) !important;
+        }
+
+        /* 모달 오버레이 */
+        .bg-black.bg-opacity-50 {
+            background: rgba(0, 0, 0, 0.7) !important;
+        }
+
+        /* 링 포커스 */
+        .ring-blue-500 {
+            --tw-ring-color: #f0b90b !important;
+        }
+        .border-blue-500 {
+            border-color: #f0b90b !important;
+        }
+
+        /* 스크롤바 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e2329;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2b3139;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3b424b;
+        }
+
+        /* 심볼 뱃지 */
+        .bg-green-100 {
+            background: rgba(14, 203, 129, 0.2) !important;
+        }
+        .text-green-800 {
+            color: #0ecb81 !important;
+        }
+        .bg-red-100 {
+            background: rgba(246, 70, 93, 0.2) !important;
+        }
+        .text-red-800 {
+            color: #f6465d !important;
+        }
+
+        /* 모바일 반응형 */
+        @media (max-width: 768px) {
+            .lg\:grid-cols-3 {
+                grid-template-columns: 1fr !important;
+            }
+            .lg\:col-span-2 {
+                grid-column: span 1 !important;
+            }
+            .p-4 {
+                padding: 12px !important;
+            }
+            .p-6 {
+                padding: 16px !important;
+            }
+            .text-3xl {
+                font-size: 1.5rem !important;
+            }
+            .max-w-6xl, .max-w-2xl {
+                max-width: 95% !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .gap-4 {
+                gap: 8px !important;
+            }
+            .gap-6 {
+                gap: 12px !important;
+            }
+            .text-xl {
+                font-size: 1rem !important;
+            }
+            .text-2xl {
+                font-size: 1.25rem !important;
+            }
+        }
+    </style>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function BacktestApp() {
+            // 상태 관리
+            const [symbols, setSymbols] = useState([]);
+            const [strategies, setStrategies] = useState([]);
+            const [selectedSymbols, setSelectedSymbols] = useState([]);
+            const [selectedStrategies, setSelectedStrategies] = useState(['keltner_ict_turtle']);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [timeframes, setTimeframes] = useState(['1h']);
+            const [startDate, setStartDate] = useState('2024-01-01');
+            const [endDate, setEndDate] = useState('2025-01-01');
+            const [capital, setCapital] = useState(10000);
+            // 옵션
+            const [riskPct, setRiskPct] = useState(2.0);
+            const [leverage, setLeverage] = useState(1.0);
+            const [topN, setTopN] = useState(10);
+            const [useTopN, setUseTopN] = useState(false);
+            const [showTopNModal, setShowTopNModal] = useState(false);
+            const [topNSelectedSymbols, setTopNSelectedSymbols] = useState([]);
+            const [binanceSymbols, setBinanceSymbols] = useState([]);
+            const [binanceLoading, setBinanceLoading] = useState(false);
+            const [binanceUpdatedAt, setBinanceUpdatedAt] = useState(null);
+            const [useBinanceList, setUseBinanceList] = useState(false);
+            const [symbolSortMode, setSymbolSortMode] = useState('volume'); // 'volume' or 'price'
+            // Pattern RAG 옵션
+            const [patternRagLearnOnly, setPatternRagLearnOnly] = useState(false);
+            const [patternRagLearning, setPatternRagLearning] = useState(false);
+            const [patternRagLearnProgress, setPatternRagLearnProgress] = useState({ current: 0, total: 0, symbol: '' });
+            const [loading, setLoading] = useState(false);
+            const [results, setResults] = useState([]);
+            const [showResults, setShowResults] = useState(false);
+            const [progress, setProgress] = useState({ current: 0, total: 0, symbol: '', strategy: '' });
+            // 차트 관련 상태
+            const [showChart, setShowChart] = useState(false);
+            const [chartData, setChartData] = useState(null);
+            const [selectedResultForChart, setSelectedResultForChart] = useState(null);
+            // Watch Symbols
+            const [watchSymbols, setWatchSymbols] = useState([]);
+            const [showWatchModal, setShowWatchModal] = useState(false);
+            const [watchFilters, setWatchFilters] = useState({
+                minPnlPct: 5.0,
+                minWinRate: 50.0,
+                minProfitFactor: 1.0
+            });
+
+            // 전략 설정 모달
+            const [showStrategySettings, setShowStrategySettings] = useState(false);
+            const [strategyConfigs, setStrategyConfigs] = useState({});
+            const [editingStrategyConfig, setEditingStrategyConfig] = useState(null);
+            // 전략 스키마 (동적 로드)
+            const [strategySchemas, setStrategySchemas] = useState({});
+
+            // 토스트 알림
+            const [toasts, setToasts] = useState([]);
+            const toastIdRef = React.useRef(0);
+
+            // 토스트 표시 함수
+            const showToast = (message, type = 'info', duration = 4000) => {
+                const id = ++toastIdRef.current;
+                const toast = { id, message, type };
+                setToasts(prev => [...prev, toast]);
+
+                // 자동 제거
+                setTimeout(() => {
+                    setToasts(prev => prev.filter(t => t.id !== id));
+                }, duration);
+            };
+
+            // 토스트 수동 닫기
+            const removeToast = (id) => {
+                setToasts(prev => prev.filter(t => t.id !== id));
+            };
+
+            // 사이드바 박스 순서 관리
+            const defaultBoxOrder = ['strategies', 'period', 'timeframe', 'runButton', 'progress'];
+            const [boxOrder, setBoxOrder] = useState(() => {
+                const saved = localStorage.getItem('backtester_box_order');
+                return saved ? JSON.parse(saved) : defaultBoxOrder;
+            });
+            const [draggedBox, setDraggedBox] = useState(null);
+            const [dragOverBox, setDragOverBox] = useState(null);
+
+            // 박스 순서 저장
+            useEffect(() => {
+                localStorage.setItem('backtester_box_order', JSON.stringify(boxOrder));
+            }, [boxOrder]);
+
+            // 드래그 시작
+            const handleDragStart = (e, boxId) => {
+                setDraggedBox(boxId);
+                e.dataTransfer.effectAllowed = 'move';
+            };
+
+            // 드래그 중
+            const handleDragOver = (e, boxId) => {
+                e.preventDefault();
+                if (draggedBox && draggedBox !== boxId) {
+                    setDragOverBox(boxId);
+                }
+            };
+
+            // 드래그 종료
+            const handleDragEnd = () => {
+                setDraggedBox(null);
+                setDragOverBox(null);
+            };
+
+            // 드롭
+            const handleDrop = (e, targetBoxId) => {
+                e.preventDefault();
+                if (!draggedBox || draggedBox === targetBoxId) return;
+
+                const newOrder = [...boxOrder];
+                const draggedIndex = newOrder.indexOf(draggedBox);
+                const targetIndex = newOrder.indexOf(targetBoxId);
+
+                newOrder.splice(draggedIndex, 1);
+                newOrder.splice(targetIndex, 0, draggedBox);
+
+                setBoxOrder(newOrder);
+                setDraggedBox(null);
+                setDragOverBox(null);
+            };
+
+            // 초기 데이터 로드
+            useEffect(() => {
+                fetchSymbols();
+                fetchStrategies();
+                fetchWatchSymbols();
+            }, []);
+
+            // 차트 모달 이벤트 리스너
+            useEffect(() => {
+                const handleShowChart = (event) => {
+                    const result = event.detail;
+                    setSelectedResultForChart(result);
+                    setShowChart(true);
+                    loadChartData(result);
+                };
+
+                window.addEventListener('showChart', handleShowChart);
+                return () => window.removeEventListener('showChart', handleShowChart);
+            }, []);
+
+            // 차트 데이터가 변경되면 다시 렌더링
+            useEffect(() => {
+                if (chartData && selectedResultForChart && showChart) {
+                    const chartElement = document.getElementById('backtest-chart');
+                    if (chartElement) {
+                        setTimeout(() => {
+                            renderChart(chartData.candles, chartData.trades, selectedResultForChart);
+                        }, 200);
+                    }
+                }
+            }, [chartData, selectedResultForChart, showChart]);
+
+            // 차트 데이터가 변경되면 다시 렌더링
+            useEffect(() => {
+                if (chartData && selectedResultForChart && showChart) {
+                    setTimeout(() => {
+                        renderChart(chartData.candles, chartData.trades, selectedResultForChart);
+                    }, 200);
+                }
+            }, [chartData, selectedResultForChart, showChart]);
+
+            // 차트 데이터 로드
+            const loadChartData = async (result) => {
+                try {
+                    setChartData(null);
+                    
+                    // 캔들 데이터 가져오기
+                    const candlesResponse = await fetch(
+                        `/api/candles?symbol=${result.symbol}&tf=${result.tf}&start_date=${result.start_date}&end_date=${result.end_date}`
+                    );
+                    const candlesData = await candlesResponse.json();
+                    
+                    if (!candlesData.success || !candlesData.candles) {
+                        throw new Error('캔들 데이터를 가져올 수 없습니다.');
+                    }
+
+                    // 차트 데이터 저장 (렌더링은 useEffect에서 처리)
+                    setChartData({ candles: candlesData.candles, trades: result.trades || [] });
+                } catch (error) {
+                    console.error('차트 데이터 로드 오류:', error);
+                    showToast('차트 데이터 로드 실패: ' + error.message, 'error');
+                }
+            };
+
+            // 차트 렌더링 함수
+            const renderChart = (candles, trades, result) => {
+                if (!window.Plotly) {
+                    console.error('Plotly가 로드되지 않았습니다.');
+                    return;
+                }
+
+                const chartElement = document.getElementById('backtest-chart');
+                if (!chartElement) {
+                    console.error('차트 요소를 찾을 수 없습니다.');
+                    return;
+                }
+
+                // 캔들 데이터 준비
+                const times = candles.map(c => c.time);
+                const opens = candles.map(c => c.open);
+                const highs = candles.map(c => c.high);
+                const lows = candles.map(c => c.low);
+                const closes = candles.map(c => c.close);
+                const volumes = candles.map(c => c.volume);
+
+                // 캔들스틱 트레이스
+                const candlestickTrace = {
+                    x: times,
+                    open: opens,
+                    high: highs,
+                    low: lows,
+                    close: closes,
+                    type: 'candlestick',
+                    name: 'Price',
+                    increasing: { line: { color: '#0ecb81' } },
+                    decreasing: { line: { color: '#f6465d' } }
+                };
+
+                const traces = [candlestickTrace];
+
+                // 진입 포인트
+                const entryTimes = [];
+                const entryPrices = [];
+                const entryDirections = [];
+                trades.forEach(trade => {
+                    if (trade.entry_time) {
+                        entryTimes.push(trade.entry_time);
+                        entryPrices.push(trade.entry_price);
+                        entryDirections.push(trade.direction);
+                    }
+                });
+
+                if (entryTimes.length > 0) {
+                    // LONG 진입
+                    const longEntryTimes = [];
+                    const longEntryPrices = [];
+                    entryTimes.forEach((time, idx) => {
+                        if (entryDirections[idx] === 'long') {
+                            longEntryTimes.push(time);
+                            longEntryPrices.push(entryPrices[idx]);
+                        }
+                    });
+
+                    if (longEntryTimes.length > 0) {
+                        traces.push({
+                            x: longEntryTimes,
+                            y: longEntryPrices,
+                            mode: 'markers',
+                            type: 'scatter',
+                            name: 'LONG 진입',
+                            marker: {
+                                symbol: 'triangle-up',
+                                size: 12,
+                                color: '#0ecb81',
+                                line: { color: '#0a9d6e', width: 2 }
+                            }
+                        });
+                    }
+
+                    // SHORT 진입
+                    const shortEntryTimes = [];
+                    const shortEntryPrices = [];
+                    entryTimes.forEach((time, idx) => {
+                        if (entryDirections[idx] === 'short') {
+                            shortEntryTimes.push(time);
+                            shortEntryPrices.push(entryPrices[idx]);
+                        }
+                    });
+
+                    if (shortEntryTimes.length > 0) {
+                        traces.push({
+                            x: shortEntryTimes,
+                            y: shortEntryPrices,
+                            mode: 'markers',
+                            type: 'scatter',
+                            name: 'SHORT 진입',
+                            marker: {
+                                symbol: 'triangle-down',
+                                size: 12,
+                                color: '#f6465d',
+                                line: { color: '#c7364a', width: 2 }
+                            }
+                        });
+                    }
+                }
+
+                // 청산 포인트
+                const exitTimes = [];
+                const exitPrices = [];
+                const exitReasons = [];
+                trades.forEach(trade => {
+                    if (trade.exit_time && trade.exit_price) {
+                        exitTimes.push(trade.exit_time);
+                        exitPrices.push(trade.exit_price);
+                        exitReasons.push(trade.exit_reason);
+                    }
+                });
+
+                if (exitTimes.length > 0) {
+                    traces.push({
+                        x: exitTimes,
+                        y: exitPrices,
+                        mode: 'markers',
+                        type: 'scatter',
+                        name: '청산',
+                        marker: {
+                            symbol: 'x',
+                            size: 10,
+                            color: '#f0b90b',
+                            line: { color: '#d4a008', width: 2 }
+                        },
+                        text: exitReasons,
+                        textposition: 'top center',
+                        textfont: { size: 10 }
+                    });
+                }
+
+                // SL/TP 라인 (첫 번째 거래만 예시)
+                if (trades.length > 0 && trades[0].stop_loss && trades[0].take_profit_1) {
+                    const firstTrade = trades[0];
+                    traces.push({
+                        x: [times[0], times[times.length - 1]],
+                        y: [firstTrade.stop_loss, firstTrade.stop_loss],
+                        mode: 'lines',
+                        type: 'scatter',
+                        name: 'SL',
+                        line: { color: '#f6465d', width: 1, dash: 'dash' }
+                    });
+                    traces.push({
+                        x: [times[0], times[times.length - 1]],
+                        y: [firstTrade.take_profit_1, firstTrade.take_profit_1],
+                        mode: 'lines',
+                        type: 'scatter',
+                        name: 'TP1',
+                        line: { color: '#0ecb81', width: 1, dash: 'dash' }
+                    });
+                }
+
+                // 레이아웃 설정
+                const layout = {
+                    title: {
+                        text: `${result?.symbol || ''} ${result?.tf || ''} - ${result?.strategy || ''}`,
+                        font: { size: 16 }
+                    },
+                    xaxis: {
+                        title: '시간',
+                        type: 'date',
+                        rangeslider: { visible: false }
+                    },
+                    yaxis: {
+                        title: '가격 (USDT)',
+                        side: 'right'
+                    },
+                    height: 600,
+                    showlegend: true,
+                    legend: { x: 0, y: 1 },
+                    hovermode: 'x unified',
+                    plot_bgcolor: 'white',
+                    paper_bgcolor: 'white'
+                };
+
+                // 차트 렌더링
+                window.Plotly.newPlot('backtest-chart', traces, layout, {
+                    responsive: true,
+                    displayModeBar: true
+                });
+            };
+
+            const fetchSymbols = async () => {
+                try {
+                    const response = await fetch('/api/symbols');
+                    const data = await response.json();
+                    setSymbols(data.symbols || []);
+                } catch (error) {
+                    console.error('심볼 로드 실패:', error);
+                }
+            };
+
+            // 전략 설명 커스텀 (localStorage)
+            const [customDescriptions, setCustomDescriptions] = useState(() => {
+                const saved = localStorage.getItem('backtester_strategy_descriptions');
+                return saved ? JSON.parse(saved) : {};
+            });
+            const [editingStrategy, setEditingStrategy] = useState(null);
+            const [editingDesc, setEditingDesc] = useState('');
+            const descInputRef = useRef(null);
+
+            // 커스텀 설명 저장
+            useEffect(() => {
+                localStorage.setItem('backtester_strategy_descriptions', JSON.stringify(customDescriptions));
+            }, [customDescriptions]);
+
+            // 설명 편집 시작
+            const startEditDescription = (e, strategyName, currentDesc) => {
+                e.stopPropagation();
+                setEditingStrategy(strategyName);
+                setEditingDesc(customDescriptions[strategyName] || currentDesc);
+            };
+
+            // 설명 편집 완료
+            const finishEditDescription = (strategyName) => {
+                if (editingDesc.trim()) {
+                    setCustomDescriptions(prev => ({
+                        ...prev,
+                        [strategyName]: editingDesc.trim()
+                    }));
+                }
+                setEditingStrategy(null);
+                setEditingDesc('');
+            };
+
+            // 설명 편집 취소
+            const cancelEditDescription = () => {
+                setEditingStrategy(null);
+                setEditingDesc('');
+            };
+
+            // 편집 모드일 때 input에 포커스
+            useEffect(() => {
+                if (editingStrategy && descInputRef.current) {
+                    descInputRef.current.focus();
+                    descInputRef.current.select();
+                }
+            }, [editingStrategy]);
+
+            // 심볼 데이터 통계 툴팁
+            const [hoveredSymbol, setHoveredSymbol] = useState(null);
+            const [symbolStats, setSymbolStats] = useState({});
+            const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+            const hoverTimeoutRef = useRef(null);
+
+            // 심볼 hover 시 통계 로드
+            const handleSymbolMouseEnter = async (e, symbol) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setTooltipPos({ x: rect.right + 10, y: rect.top });
+
+                // 이미 로드된 경우 바로 표시
+                if (symbolStats[symbol]) {
+                    setHoveredSymbol(symbol);
+                    return;
+                }
+
+                // 딜레이 후 로드 (빠른 스크롤 시 불필요한 요청 방지)
+                hoverTimeoutRef.current = setTimeout(async () => {
+                    try {
+                        const response = await fetch(`/api/symbol_stats/${symbol}`);
+                        const data = await response.json();
+                        // 캐시 제한 (최대 50개) - 메모리 최적화
+                        setSymbolStats(prev => {
+                            const keys = Object.keys(prev);
+                            if (keys.length >= 50) {
+                                const newStats = {};
+                                keys.slice(-30).forEach(k => newStats[k] = prev[k]); // 최근 30개만 유지
+                                newStats[symbol] = data.years || [];
+                                return newStats;
+                            }
+                            return { ...prev, [symbol]: data.years || [] };
+                        });
+                        setHoveredSymbol(symbol);
+                    } catch (error) {
+                        console.error('심볼 통계 로드 실패:', error);
+                    }
+                }, 300);
+            };
+
+            const handleSymbolMouseLeave = () => {
+                if (hoverTimeoutRef.current) {
+                    clearTimeout(hoverTimeoutRef.current);
+                }
+                setHoveredSymbol(null);
+            };
+
+            // 숫자 포맷팅 (1,234 형식)
+            const formatNumber = (num) => {
+                return num ? num.toLocaleString() : '0';
+            };
+
+            const fetchStrategies = async () => {
+                try {
+                    const response = await fetch('/api/strategies');
+                    const data = await response.json();
+                    setStrategies(data.strategies || []);
+                } catch (error) {
+                    console.error('전략 로드 실패:', error);
+                }
+            };
+
+            const fetchWatchSymbols = async () => {
+                try {
+                    const response = await fetch('/api/watch_symbols');
+                    const data = await response.json();
+                    setWatchSymbols(data.symbols || []);
+                } catch (error) {
+                    console.error('감시 심볼 로드 실패:', error);
+                }
+            };
+
+            // 바이낸스 24시간 거래량 상위 심볼 가져오기
+            const fetchBinanceSymbols = async () => {
+                setBinanceLoading(true);
+                try {
+                    const response = await fetch('/api/symbols/binance');
+                    const data = await response.json();
+                    if (data.symbols) {
+                        setBinanceSymbols(data.symbols);
+                        setBinanceUpdatedAt(new Date().toLocaleTimeString('ko-KR'));
+                        setUseBinanceList(true);
+                    }
+                } catch (error) {
+                    console.error('바이낸스 심볼 로드 실패:', error);
+                    showToast('바이낸스 API 호출 실패: ' + error.message, 'error');
+                } finally {
+                    setBinanceLoading(false);
+                }
+            };
+
+            // 거래량/가격 상위 심볼 목록 (바이낸스 또는 DB)
+            const topSymbolsList = React.useMemo(() => {
+                const list = useBinanceList ? binanceSymbols : symbols;
+                if (symbolSortMode === 'price') {
+                    return [...list].sort((a, b) => (b.price || 0) - (a.price || 0));
+                }
+                return [...list].sort((a, b) => (b.quoteVolume || b.volume || 0) - (a.quoteVolume || a.volume || 0));
+            }, [useBinanceList, binanceSymbols, symbols, symbolSortMode]);
+
+            // 전략 설정 로드
+            const fetchStrategyConfigs = async () => {
+                try {
+                    // tradeBot 스타일로 통일: /api/strategies 에서 enabled/config 포함
+                    const response = await fetch('/api/strategies');
+                    const data = await response.json();
+                    if (data.strategies) {
+                        const cfgs = {};
+                        data.strategies.forEach(s => {
+                            cfgs[s.name] = s.config || {};
+                        });
+                        setStrategyConfigs(cfgs);
+                    }
+                } catch (error) {
+                    console.error('전략 설정 로드 실패:', error);
+                }
+            };
+
+            // 전략 스키마 로드 (동적 UI 생성용)
+            const fetchStrategySchemas = async () => {
+                try {
+                    const response = await fetch('/api/strategies/schema');
+                    const data = await response.json();
+                    if (data.schemas) {
+                        setStrategySchemas(data.schemas);
+                        console.log('전략 스키마 로드됨:', Object.keys(data.schemas));
+                    }
+                } catch (error) {
+                    console.error('전략 스키마 로드 실패:', error);
+                }
+            };
+
+            // 전략 설정 저장
+            const saveStrategyConfig = async (strategyName, config) => {
+                try {
+                    // enabled는 별도 필드로 보내고, config에는 넣지 않음(tradeBot과 동일한 규칙)
+                    const enabled = config?.enabled;
+                    const cleanConfig = { ...(config || {}) };
+                    delete cleanConfig.enabled;
+
+                    // tradeBot 스타일로 통일: PUT /api/strategies/{name}
+                    const response = await fetch(`/api/strategies/${strategyName}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled, config: cleanConfig })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        setStrategyConfigs(prev => ({
+                            ...prev,
+                            [strategyName]: config
+                        }));
+                        showToast(`${strategyName} 설정이 저장되었습니다.`, 'success');
+                        // 리스트 상태도 갱신(ON/OFF 반영)
+                        fetchStrategies();
+                    }
+                } catch (error) {
+                    console.error('전략 설정 저장 실패:', error);
+                    showToast('전략 설정 저장 실패', 'error');
+                }
+            };
+
+            // 전략 전역 Enable/Disable (tradeBot 스타일)
+            const setStrategyEnabled = async (strategyName, enabled) => {
+                try {
+                    const endpoint = enabled ? 'enable' : 'disable';
+                    const response = await fetch(`/api/strategies/${strategyName}/${endpoint}`, { method: 'POST' });
+                    const data = await response.json();
+                    if (data.success) {
+                        showToast(`${strategyName}: ${enabled ? 'ON' : 'OFF'}`, 'success');
+                        // 전략 목록/설정 갱신
+                        await fetchStrategies();
+                        await fetchStrategyConfigs();
+                    } else {
+                        showToast(`${strategyName} 변경 실패`, 'error');
+                    }
+                } catch (error) {
+                    console.error('전략 enable/disable 실패:', error);
+                    showToast('전략 enable/disable 실패', 'error');
+                }
+            };
+
+            // 전략별 기본 설정 정의
+            const defaultStrategyParams = {
+                ema_cross: {
+                    use_ai: { label: '🤖 AI 검증', type: 'checkbox', default: false },
+                    timeframe: { label: '타임프레임', type: 'select', options: ['15m', '30m', '1h', '4h'], default: '30m' },
+                    score_threshold: { label: '최소 점수', type: 'number', min: 0, max: 1, step: 0.1, default: 0.7 },
+                    atr_multiplier: { label: 'ATR 배수', type: 'number', min: 0.5, max: 5, step: 0.1, default: 1.5 },
+                    use_rsi_filter: { label: 'RSI 필터', type: 'checkbox', default: true },
+                    use_vwap_filter: { label: 'VWAP 필터', type: 'checkbox', default: true },
+                    // EMA Cross 청산 규칙 설정
+                    tp1_partial_exit_pct: { label: 'TP1 부분 청산 비율 (%)', type: 'number', min: 0, max: 100, step: 5, default: 50.0 },
+                    use_trailing_stop: { label: 'TP2 트레일링 스톱 사용', type: 'checkbox', default: true },
+                    exit_on_ema50_touch: { label: 'EMA50 터치 시 청산', type: 'checkbox', default: true }
+                },
+                ict: {
+                    use_ai: { label: '🤖 AI 검증', type: 'checkbox', default: true },
+                    timeframe: { label: '타임프레임', type: 'select', options: ['5m', '15m', '30m', '1h'], default: '15m' },
+                    ob_lookback: { label: 'OB 탐지 범위', type: 'number', min: 5, max: 50, step: 1, default: 20 },
+                    fvg_min_gap_pct: { label: 'FVG 최소 갭 (%)', type: 'number', min: 0.0001, max: 0.01, step: 0.0001, default: 0.001 },
+                    min_confidence: { label: '최소 신뢰도', type: 'number', min: 0, max: 1, step: 0.05, default: 0.65 },
+                    min_risk_reward: { label: '최소 R/R', type: 'number', min: 0.5, max: 5, step: 0.1, default: 1.5 },
+                    atr_multiplier: { label: 'ATR 배수', type: 'number', min: 0.5, max: 5, step: 0.1, default: 2.0 },
+                    proximity_pct: { label: '근접 비율 (%)', type: 'number', min: 0.001, max: 0.05, step: 0.001, default: 0.01 },
+                    use_volume_filter: { label: '볼륨 필터', type: 'checkbox', default: true },
+                    use_rsi_filter: { label: 'RSI 필터', type: 'checkbox', default: true },
+                    volume_multiplier: { label: '볼륨 배수', type: 'number', min: 1, max: 3, step: 0.1, default: 1.3 },
+                    rsi_overbought: { label: 'RSI 과매수', type: 'number', min: 60, max: 90, step: 1, default: 70 },
+                    rsi_oversold: { label: 'RSI 과매도', type: 'number', min: 10, max: 40, step: 1, default: 30 }
+                },
+                rsi: {
+                    use_ai: { label: '🤖 AI 검증', type: 'checkbox', default: false },
+                    timeframe: { label: '타임프레임', type: 'select', options: ['15m', '30m', '1h', '4h'], default: '1h' },
+                    overbought: { label: '과매수 기준', type: 'number', min: 60, max: 90, step: 1, default: 70 },
+                    oversold: { label: '과매도 기준', type: 'number', min: 10, max: 40, step: 1, default: 30 },
+                    rsi_period: { label: 'RSI 기간', type: 'number', min: 7, max: 28, step: 1, default: 14 },
+                    use_trend_filter: { label: 'EMA 트렌드 필터', type: 'checkbox', default: true },
+                    atr_multiplier: { label: 'ATR 배수', type: 'number', min: 0.5, max: 5, step: 0.1, default: 1.5 },
+                    min_confidence: { label: '최소 신뢰도', type: 'number', min: 0, max: 1, step: 0.1, default: 0.5 }
+                },
+                bollinger: {
+                    use_ai: { label: '🤖 AI 검증', type: 'checkbox', default: false },
+                    timeframe: { label: '타임프레임', type: 'select', options: ['15m', '30m', '1h', '4h', '1d'], default: '4h' },
+                    period: { label: 'BB 기간', type: 'number', min: 10, max: 50, step: 1, default: 20 },
+                    std_dev: { label: '표준편차 배수', type: 'number', min: 1, max: 4, step: 0.1, default: 2.0 },
+                    mode: { label: '모드', type: 'select', options: ['breakout', 'reversal'], default: 'breakout' },
+                    volume_filter: { label: '볼륨 필터', type: 'checkbox', default: true },
+                    atr_multiplier: { label: 'ATR 배수', type: 'number', min: 0.5, max: 5, step: 0.1, default: 1.5 },
+                    min_confidence: { label: '최소 신뢰도', type: 'number', min: 0, max: 1, step: 0.1, default: 0.5 }
+                },
+                keltner_ict_turtle: {
+                    use_ai: { label: '🤖 AI 검증', type: 'checkbox', default: false },
+                    timeframe: { label: '타임프레임', type: 'select', options: ['30m', '1h', '4h'], default: '1h' },
+                    ema_period: { label: 'EMA 기간', type: 'number', min: 10, max: 50, step: 1, default: 20 },
+                    atr_period: { label: 'ATR 기간', type: 'number', min: 10, max: 50, step: 1, default: 20 },
+                    keltner_multiplier: { label: 'Keltner ATR 배수', type: 'number', min: 1, max: 5, step: 0.1, default: 2.5 },
+                    donchian_period: { label: '돈치안 기간', type: 'number', min: 20, max: 100, step: 1, default: 55 },
+                    ob_lookback: { label: 'OB 탐색 기간', type: 'number', min: 5, max: 30, step: 1, default: 10 },
+                    fvg_min_gap: { label: 'FVG 최소 갭', type: 'number', min: 0.0001, max: 0.01, step: 0.0001, default: 0.001 },
+                    volume_multiplier: { label: '볼륨 배수', type: 'number', min: 1, max: 3, step: 0.1, default: 1.3 },
+                    require_ict: { label: 'ICT 필수', type: 'checkbox', default: false },
+                    min_confidence: { label: '최소 신뢰도', type: 'number', min: 0, max: 1, step: 0.1, default: 0.5 },
+                    atr_multiplier: { label: 'ATR 배수 (SL)', type: 'number', min: 1, max: 5, step: 0.1, default: 2.5 }
+                },
+                pattern_rag: {
+                    use_ai: { label: '🤖 AI 검증', type: 'checkbox', default: false },
+                    timeframe: { label: '타임프레임', type: 'select', options: ['30m', '1h', '4h'], default: '1h' },
+                    top_k: { label: '유사 패턴 개수', type: 'number', min: 3, max: 30, step: 1, default: 10 },
+                    min_confidence: { label: '최소 신뢰도', type: 'number', min: 0, max: 1, step: 0.1, default: 0.6 },
+                    min_patterns: { label: '최소 패턴 수', type: 'number', min: 1, max: 20, step: 1, default: 5 },
+                    min_avg_return: { label: '최소 평균수익률 (%)', type: 'number', min: 0, max: 50, step: 1, default: 10.0 },
+                    auto_learn: { label: '자동 학습', type: 'checkbox', default: true },
+                    atr_multiplier: { label: 'ATR 배수', type: 'number', min: 0.5, max: 5, step: 0.1, default: 2.0 }
+                },
+                bb_adaptive_rsi: {
+                    use_ai: { label: '🤖 AI 검증', type: 'checkbox', default: false },
+                    timeframe: { label: '타임프레임', type: 'select', options: ['15m', '30m', '1h', '4h'], default: '30m' },
+                    bb_length: { label: 'BB 기간', type: 'number', min: 10, max: 50, step: 1, default: 20 },
+                    bb_std_dev: { label: 'BB 표준편차 (σ)', type: 'number', min: 1, max: 5, step: 0.5, default: 3.0 },
+                    er_length: { label: 'ER 기간', type: 'number', min: 5, max: 30, step: 1, default: 10 },
+                    fast_rsi_length: { label: '빠른 RSI 기간', type: 'number', min: 2, max: 10, step: 1, default: 2 },
+                    slow_rsi_length: { label: '느린 RSI 기간', type: 'number', min: 10, max: 50, step: 1, default: 30 },
+                    rsi_smooth: { label: 'RSI 스무딩', type: 'number', min: 1, max: 10, step: 1, default: 3 },
+                    rsi_overbought: { label: 'RSI 과매수', type: 'number', min: 60, max: 90, step: 1, default: 70 },
+                    rsi_oversold: { label: 'RSI 과매도', type: 'number', min: 10, max: 40, step: 1, default: 30 },
+                    use_rsi_filter: { label: 'RSI 필터 사용', type: 'checkbox', default: true },
+                    atr_multiplier: { label: 'ATR 배수', type: 'number', min: 0.5, max: 5, step: 0.1, default: 1.5 },
+                    min_confidence: { label: '최소 신뢰도', type: 'number', min: 0, max: 1, step: 0.1, default: 0.5 }
+                }
+            };
+
+            // 전략 설정 초기화 (초기 로드 시)
+            useEffect(() => {
+                fetchStrategyConfigs();
+                fetchStrategySchemas();  // 동적 스키마 로드
+
+                // cleanup - 메모리 최적화
+                return () => {
+                    if (hoverTimeoutRef.current) {
+                        clearTimeout(hoverTimeoutRef.current);
+                    }
+                    // 캐시 정리
+                    setSymbolStats({});
+                    setResults([]);
+                };
+            }, []);
+
+            // 동적 스키마 사용 (API fallback to defaultStrategyParams)
+            const getStrategyParams = (strategyName) => {
+                // API 스키마와 기본값 병합 (기본값이 우선)
+                const apiSchema = strategySchemas[strategyName] || {};
+                const defaultParams = defaultStrategyParams[strategyName] || {};
+                // 기본값을 우선으로 하되, API 스키마에 있는 것은 유지
+                return { ...defaultParams, ...apiSchema };
+            };
+
+            // 심볼 검색
+            const filteredSymbols = symbols.filter(s =>
+                s.symbol.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+
+            // 심볼 선택/해제
+            const toggleSymbol = (symbol) => {
+                if (selectedSymbols.includes(symbol)) {
+                    setSelectedSymbols(selectedSymbols.filter(s => s !== symbol));
+                } else {
+                    setSelectedSymbols([...selectedSymbols, symbol]);
+                }
+            };
+
+            // 전략 선택/해제
+            const toggleStrategy = (strategyName) => {
+                if (selectedStrategies.includes(strategyName)) {
+                    if (selectedStrategies.length > 1) {
+                        setSelectedStrategies(selectedStrategies.filter(s => s !== strategyName));
+                    }
+                } else {
+                    setSelectedStrategies([...selectedStrategies, strategyName]);
+                }
+            };
+
+            // 전체 선택/해제
+            const toggleAll = () => {
+                if (selectedSymbols.length === filteredSymbols.length) {
+                    setSelectedSymbols([]);
+                } else {
+                    setSelectedSymbols(filteredSymbols.map(s => s.symbol));
+                }
+            };
+
+            // TF 토글
+            const toggleTimeframe = (tf) => {
+                if (timeframes.includes(tf)) {
+                    if (timeframes.length > 1) {
+                        setTimeframes(timeframes.filter(t => t !== tf));
+                    }
+                } else {
+                    setTimeframes([...timeframes, tf]);
+                }
+            };
+
+            // 백테스트 실행
+            const runBacktest = async () => {
+                // 심볼 하나만 선택했는지 확인
+                const symbolsToTest = useTopN
+                    ? (topNSelectedSymbols.length > 0 ? topNSelectedSymbols : symbols.slice(0, topN).map(s => s.symbol))
+                    : selectedSymbols;
+                
+                if (symbolsToTest.length !== 1) {
+                    showToast('차트 기능은 심볼 1개만 선택했을 때 사용할 수 있습니다.', 'warning');
+                }
+                
+                setLoading(true);
+                setResults([]);
+                setShowResults(false);
+
+                try {
+                    const totalTests = symbolsToTest.length * timeframes.length * selectedStrategies.length;
+                    setProgress({ current: 0, total: totalTests, symbol: '', strategy: '' });
+
+                    // 전략별 설정 수집 (EMA Cross 청산 규칙 포함)
+                    const strategyConfigsToSend = {};
+                    if (selectedStrategies.includes('ema_cross')) {
+                        const emaCrossConfig = strategyConfigs['ema_cross'] || {};
+                        strategyConfigsToSend['ema_cross'] = {
+                            tp1_partial_exit_pct: emaCrossConfig.tp1_partial_exit_pct || 50.0,
+                            use_trailing_stop: emaCrossConfig.use_trailing_stop !== false,
+                            exit_on_ema50_touch: emaCrossConfig.exit_on_ema50_touch !== false
+                        };
+                    }
+                    
+                    const response = await fetch('/api/backtest', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            symbols: symbolsToTest,
+                            timeframes: timeframes,
+                            strategies: selectedStrategies,
+                            start_date: startDate,
+                            end_date: endDate,
+                            initial_capital: capital,
+                            risk_pct: riskPct,
+                            leverage: leverage,
+                            strategy_configs: strategyConfigsToSend
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('백테스트 실패');
+                    }
+
+                    // 스트리밍으로 진행상황 받기
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = JSON.parse(line.slice(6));
+
+                                if (data.type === 'progress') {
+                                    setProgress({
+                                        current: data.current,
+                                        total: data.total,
+                                        symbol: data.symbol || '',
+                                        strategy: data.strategy || ''
+                                    });
+                                } else if (data.type === 'result') {
+                                    setResults(prev => [...prev, data.result]);
+                                } else if (data.type === 'error') {
+                                    console.error('백테스트 오류:', data);
+                                }
+                            }
+                        }
+                    }
+
+                    setShowResults(true);
+                } catch (error) {
+                    console.error('백테스트 오류:', error);
+                    showToast('백테스트 실패: ' + error.message, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Pattern RAG 학습 실행
+            const runPatternRagLearn = async () => {
+                setPatternRagLearning(true);
+                setPatternRagLearnProgress({ current: 0, total: 0, symbol: '' });
+
+                try {
+                    const symbolsToLearn = useTopN
+                        ? (topNSelectedSymbols.length > 0 ? topNSelectedSymbols : symbols.slice(0, topN).map(s => s.symbol))
+                        : selectedSymbols;
+
+                    const totalSymbols = symbolsToLearn.length * timeframes.length;
+                    setPatternRagLearnProgress({ current: 0, total: totalSymbols, symbol: '' });
+
+                    const response = await fetch('/api/pattern_rag/learn', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            symbols: symbolsToLearn,
+                            timeframes: timeframes,
+                            start_date: startDate,
+                            end_date: endDate
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('학습 실패');
+                    }
+
+                    // 스트리밍으로 진행상황 받기
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    let totalPatterns = 0;
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = JSON.parse(line.slice(6));
+
+                                if (data.type === 'progress') {
+                                    setPatternRagLearnProgress({
+                                        current: data.current,
+                                        total: data.total,
+                                        symbol: data.symbol || ''
+                                    });
+                                } else if (data.type === 'result') {
+                                    totalPatterns += data.patterns || 0;
+                                } else if (data.type === 'complete') {
+                                    showToast(`학습 완료! 총 ${data.total_patterns}개 패턴 저장됨`, 'success', 5000);
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Pattern RAG 학습 오류:', error);
+                    showToast('Pattern RAG 학습 실패: ' + error.message, 'error');
+                } finally {
+                    setPatternRagLearning(false);
+                }
+            };
+
+            // 결과 정렬 (수익률 높은 순)
+            const sortedResults = [...results].sort((a, b) =>
+                b.total_pnl_pct - a.total_pnl_pct
+            );
+
+            // 필터 조건을 충족하는 결과
+            const filteredResults = sortedResults.filter(r =>
+                r.total_pnl_pct >= watchFilters.minPnlPct &&
+                r.win_rate >= watchFilters.minWinRate &&
+                r.profit_factor >= watchFilters.minProfitFactor
+            );
+
+            // 감시 심볼에 추가
+            const addToWatchList = async () => {
+                try {
+                    const response = await fetch('/api/backtest/add_to_watch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            results: filteredResults,
+                            min_pnl_pct: watchFilters.minPnlPct,
+                            min_win_rate: watchFilters.minWinRate,
+                            min_profit_factor: watchFilters.minProfitFactor,
+                            notes: `백테스트 ${startDate}~${endDate}, 전략: ${selectedStrategies.join(', ')}`
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        showToast(`${data.added}개 심볼 추가됨: ${data.symbols.join(', ')} (전략: ${selectedStrategies.join(', ')})`, 'success', 5000);
+                        fetchWatchSymbols();
+                    }
+                } catch (error) {
+                    console.error('심볼 추가 실패:', error);
+                    showToast('심볼 추가 실패: ' + error.message, 'error');
+                }
+            };
+
+            // 개별 심볼 추가
+            const addSingleSymbolToWatch = async (symbol, strategy) => {
+                try {
+                    const response = await fetch('/api/watch_symbols', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            symbols: [symbol],
+                            strategies: [strategy],
+                            source: 'backtest',
+                            notes: `백테스트 ${startDate}~${endDate}`
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        showToast(`${symbol} (${strategy}) 분석 대상에 추가되었습니다.`, 'success');
+                        fetchWatchSymbols();
+                    }
+                } catch (error) {
+                    console.error('심볼 추가 실패:', error);
+                    showToast('심볼 추가 실패: ' + error.message, 'error');
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-100 p-4">
+                    {/* Toast 알림 컴포넌트 */}
+                    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+                        {toasts.map(toast => (
+                            <div
+                                key={toast.id}
+                                className={`px-4 py-3 rounded-lg shadow-lg text-white flex items-center gap-3 min-w-[280px] max-w-[400px] animate-slide-in ${
+                                    toast.type === 'success' ? 'bg-green-600' :
+                                    toast.type === 'error' ? 'bg-red-600' :
+                                    toast.type === 'warning' ? 'bg-yellow-600' :
+                                    'bg-blue-600'
+                                }`}
+                            >
+                                <span className="text-lg">
+                                    {toast.type === 'success' ? '✓' :
+                                     toast.type === 'error' ? '✕' :
+                                     toast.type === 'warning' ? '⚠' : 'ℹ'}
+                                </span>
+                                <span className="flex-1 text-sm">{toast.message}</span>
+                                <button
+                                    onClick={() => removeToast(toast.id)}
+                                    className="text-white/70 hover:text-white text-lg"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="max-w-7xl mx-auto">
+                        {/* 헤더 */}
+                        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg shadow-lg mb-6">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h1 className="text-4xl font-bold mb-2">Strategy Backtester</h1>
+                                    <p className="text-blue-100">다중 전략 백테스트 및 분석</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowWatchModal(true)}
+                                    className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg flex items-center gap-2"
+                                >
+                                    <span>👁️</span>
+                                    <span>분석 대상 ({watchSymbols.length})</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 메인 컨텐츠 */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* 왼쪽: 설정 */}
+                            <div className="lg:col-span-1 space-y-4">
+                                {boxOrder.map(boxId => {
+                                    // 전략 선택 박스
+                                    if (boxId === 'strategies') {
+                                        return (
+                                            <div
+                                                key={boxId}
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, boxId)}
+                                                onDragOver={(e) => handleDragOver(e, boxId)}
+                                                onDragEnd={handleDragEnd}
+                                                onDrop={(e) => handleDrop(e, boxId)}
+                                                className={`bg-white rounded-lg shadow p-4 transition-all ${
+                                                    draggedBox === boxId ? 'opacity-50 scale-95' : ''
+                                                } ${dragOverBox === boxId ? 'border-2 border-blue-400 border-dashed' : ''}`}
+                                            >
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <h3 className="font-bold text-lg">🎯 전략 선택</h3>
+                                                    <span className="cursor-move text-gray-400 hover:text-gray-600" title="드래그하여 순서 변경">⋮⋮</span>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {strategies.map(s => (
+                                                        <div
+                                                            key={s.name}
+                                                            onClick={() => toggleStrategy(s.name)}
+                                                            className={`p-3 rounded-lg cursor-pointer transition border-2 ${
+                                                                selectedStrategies.includes(s.name)
+                                                                    ? 'border-blue-600 bg-blue-50'
+                                                                    : 'border-gray-200 hover:border-gray-300'
+                                                            } ${s.enabled === false ? 'opacity-60' : ''}`}
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={selectedStrategies.includes(s.name)}
+                                                                        readOnly
+                                                                        className="w-4 h-4"
+                                                                    />
+                                                                    <span className="font-medium">{s.name}</span>
+                                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                                                        s.enabled === false ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                                                                    }`}>
+                                                                        {s.enabled === false ? 'OFF' : 'ON'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setStrategyEnabled(s.name, s.enabled === false);
+                                                                        }}
+                                                                        className={`px-2 py-1 text-xs rounded border transition ${
+                                                                            s.enabled === false
+                                                                                ? 'bg-green-600 text-white border-green-600 hover:bg-green-700'
+                                                                                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                                                                        }`}
+                                                                        title={`${s.name} ${s.enabled === false ? 'Enable' : 'Disable'}`}
+                                                                    >
+                                                                        {s.enabled === false ? 'Enable' : 'Disable'}
+                                                                    </button>
+
+                                                                    {/* 설정 버튼 */}
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setEditingStrategyConfig(s.name);
+                                                                            setShowStrategySettings(true);
+                                                                        }}
+                                                                        className="p-1 rounded hover:bg-gray-600 transition text-gray-400 hover:text-white"
+                                                                        title={`${s.name} 설정`}
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            {editingStrategy === s.name ? (
+                                                                <div className="mt-1 ml-6" onClick={e => e.stopPropagation()}>
+                                                                    <input
+                                                                        ref={descInputRef}
+                                                                        type="text"
+                                                                        value={editingDesc}
+                                                                        onChange={e => setEditingDesc(e.target.value)}
+                                                                        onKeyDown={e => {
+                                                                            if (e.key === 'Enter') finishEditDescription(s.name);
+                                                                            if (e.key === 'Escape') cancelEditDescription();
+                                                                        }}
+                                                                        onBlur={() => finishEditDescription(s.name)}
+                                                                        className="w-full text-xs border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                                                        placeholder="전략 설명 입력..."
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <p
+                                                                    className="text-xs text-gray-500 mt-1 ml-6 hover:text-blue-500 hover:underline cursor-text"
+                                                                    onDoubleClick={e => startEditDescription(e, s.name, s.description)}
+                                                                    title="더블클릭하여 설명 수정"
+                                                                >
+                                                                    {customDescriptions[s.name] || s.description}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {/* Pattern RAG 전용 옵션 */}
+                                                {selectedStrategies.includes('pattern_rag') && (
+                                                    <div className="mt-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                                                        <h4 className="text-sm font-bold text-purple-700 mb-2">🧠 Pattern RAG 옵션</h4>
+                                                        <div className="space-y-2">
+                                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={patternRagLearnOnly}
+                                                                    onChange={(e) => setPatternRagLearnOnly(e.target.checked)}
+                                                                    className="w-4 h-4"
+                                                                />
+                                                                <span className="text-sm">학습만 실행 (백테스트 스킵)</span>
+                                                            </label>
+                                                            <button
+                                                                onClick={runPatternRagLearn}
+                                                                disabled={patternRagLearning || (selectedSymbols.length === 0 && !useTopN) || timeframes.length === 0}
+                                                                className={`w-full py-2 rounded text-sm font-medium transition ${
+                                                                    patternRagLearning || (selectedSymbols.length === 0 && !useTopN) || timeframes.length === 0
+                                                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                                                                }`}
+                                                            >
+                                                                {patternRagLearning ? '🔄 학습 중...' : '📚 패턴 학습 시작'}
+                                                            </button>
+                                                            {patternRagLearning && (
+                                                                <div className="text-xs text-purple-600">
+                                                                    {patternRagLearnProgress.symbol && `${patternRagLearnProgress.symbol} 학습 중...`}
+                                                                    <div className="w-full bg-purple-200 rounded-full h-2 mt-1">
+                                                                        <div
+                                                                            className="bg-purple-600 h-2 rounded-full transition-all"
+                                                                            style={{ width: `${patternRagLearnProgress.total > 0 ? (patternRagLearnProgress.current / patternRagLearnProgress.total) * 100 : 0}%` }}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="text-right mt-1">{patternRagLearnProgress.current} / {patternRagLearnProgress.total}</div>
+                                                                </div>
+                                                            )}
+                                                            <p className="text-xs text-purple-500">
+                                                                학습: 과거 데이터로 패턴 DB 구축 (1회만 필요)<br/>
+                                                                백테스트: 학습된 패턴으로 신호 생성 테스트
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    }
+
+                                    // 기간 설정 박스
+                                    if (boxId === 'period') {
+                                        return (
+                                            <div
+                                                key={boxId}
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, boxId)}
+                                                onDragOver={(e) => handleDragOver(e, boxId)}
+                                                onDragEnd={handleDragEnd}
+                                                onDrop={(e) => handleDrop(e, boxId)}
+                                                className={`bg-white rounded-lg shadow p-4 transition-all ${
+                                                    draggedBox === boxId ? 'opacity-50 scale-95' : ''
+                                                } ${dragOverBox === boxId ? 'border-2 border-blue-400 border-dashed' : ''}`}
+                                            >
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <h3 className="font-bold text-lg">📅 기간 설정</h3>
+                                                    <span className="cursor-move text-gray-400 hover:text-gray-600" title="드래그하여 순서 변경">⋮⋮</span>
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-sm font-medium mb-1">시작일</label>
+                                                        <input
+                                                            type="date"
+                                                            value={startDate}
+                                                            onChange={(e) => setStartDate(e.target.value)}
+                                                            className="w-full border rounded px-3 py-2"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium mb-1">종료일</label>
+                                                        <input
+                                                            type="date"
+                                                            value={endDate}
+                                                            onChange={(e) => setEndDate(e.target.value)}
+                                                            className="w-full border rounded px-3 py-2"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium mb-1">초기 자본 ($)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={capital}
+                                                            onChange={(e) => setCapital(Number(e.target.value))}
+                                                            className="w-full border rounded px-3 py-2"
+                                                        />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-1">리스크 (%)</label>
+                                                            <input
+                                                                type="number"
+                                                                value={riskPct}
+                                                                onChange={(e) => setRiskPct(Number(e.target.value))}
+                                                                className="w-full border rounded px-3 py-2"
+                                                                step="0.1"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium mb-1">레버리지</label>
+                                                            <input
+                                                                type="number"
+                                                                value={leverage}
+                                                                onChange={(e) => setLeverage(Number(e.target.value))}
+                                                                className="w-full border rounded px-3 py-2"
+                                                                min="1"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    // 타임프레임 박스
+                                    if (boxId === 'timeframe') {
+                                        return (
+                                            <div
+                                                key={boxId}
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, boxId)}
+                                                onDragOver={(e) => handleDragOver(e, boxId)}
+                                                onDragEnd={handleDragEnd}
+                                                onDrop={(e) => handleDrop(e, boxId)}
+                                                className={`bg-white rounded-lg shadow p-4 transition-all ${
+                                                    draggedBox === boxId ? 'opacity-50 scale-95' : ''
+                                                } ${dragOverBox === boxId ? 'border-2 border-blue-400 border-dashed' : ''}`}
+                                            >
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <h3 className="font-bold text-lg">⏱️ 타임프레임</h3>
+                                                    <span className="cursor-move text-gray-400 hover:text-gray-600" title="드래그하여 순서 변경">⋮⋮</span>
+                                                </div>
+                                                <div className="grid grid-cols-5 gap-2">
+                                                    {['15m', '30m', '1h', '4h', '1d'].map(tf => (
+                                                        <button
+                                                            key={tf}
+                                                            onClick={() => toggleTimeframe(tf)}
+                                                            className={`px-3 py-2 rounded font-medium transition ${
+                                                                timeframes.includes(tf)
+                                                                    ? 'bg-blue-600 text-white'
+                                                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                            }`}
+                                                        >
+                                                            {tf}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    // 실행 버튼
+                                    if (boxId === 'runButton') {
+                                        return (
+                                            <div
+                                                key={boxId}
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, boxId)}
+                                                onDragOver={(e) => handleDragOver(e, boxId)}
+                                                onDragEnd={handleDragEnd}
+                                                onDrop={(e) => handleDrop(e, boxId)}
+                                                className={`transition-all ${
+                                                    draggedBox === boxId ? 'opacity-50 scale-95' : ''
+                                                } ${dragOverBox === boxId ? 'border-2 border-blue-400 border-dashed rounded-lg' : ''}`}
+                                            >
+                                                <button
+                                                    onClick={runBacktest}
+                                                    disabled={loading || (selectedSymbols.length === 0 && !useTopN) || timeframes.length === 0 || selectedStrategies.length === 0}
+                                                    className={`w-full py-4 rounded-lg font-bold text-lg transition ${
+                                                        loading || (selectedSymbols.length === 0 && !useTopN) || timeframes.length === 0 || selectedStrategies.length === 0
+                                                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                                            : 'bg-yellow-500 text-black hover:bg-yellow-600 shadow-lg'
+                                                    }`}
+                                                >
+                                                    {loading ? '백테스트 실행 중...' : '백테스트 시작'}
+                                                </button>
+                                            </div>
+                                        );
+                                    }
+
+                                    // 진행 상황 박스
+                                    if (boxId === 'progress' && loading) {
+                                        return (
+                                            <div
+                                                key={boxId}
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, boxId)}
+                                                onDragOver={(e) => handleDragOver(e, boxId)}
+                                                onDragEnd={handleDragEnd}
+                                                onDrop={(e) => handleDrop(e, boxId)}
+                                                className={`bg-white rounded-lg shadow p-4 transition-all ${
+                                                    draggedBox === boxId ? 'opacity-50 scale-95' : ''
+                                                } ${dragOverBox === boxId ? 'border-2 border-blue-400 border-dashed' : ''}`}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-sm">진행률</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm">{progress.current} / {progress.total}</span>
+                                                        <span className="cursor-move text-gray-400 hover:text-gray-600" title="드래그하여 순서 변경">⋮⋮</span>
+                                                    </div>
+                                                </div>
+                                                <div className="w-full bg-gray-200 rounded-full h-4 mb-2">
+                                                    <div
+                                                        className="bg-blue-600 h-4 rounded-full transition-all"
+                                                        style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                                                    />
+                                                </div>
+                                                {progress.symbol && (
+                                                    <p className="text-xs text-gray-600">
+                                                        {progress.symbol} / {progress.strategy}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    }
+
+                                    return null;
+                                })}
+                            </div>
+
+                            {/* 오른쪽: 심볼 선택 */}
+                            <div className="lg:col-span-2 bg-white rounded-lg shadow p-4">
+                                <h3 className="font-bold text-lg mb-3">📊 심볼 선택</h3>
+
+                                {/* Top N 옵션 */}
+                                <div
+                                    className="mb-4 p-3 bg-blue-50 rounded-lg cursor-pointer hover:bg-blue-100 transition"
+                                    onClick={() => setShowTopNModal(true)}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            <span className="text-xl">🔍</span>
+                                            <span className="font-medium">심볼 검색..</span>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            {useTopN && (
+                                                <span className="bg-yellow-500 text-black px-2 py-1 rounded text-sm font-bold">
+                                                    {topNSelectedSymbols.length > 0 ? `${topNSelectedSymbols.length}개 선택됨` : `상위 ${topN}개`}
+                                                </span>
+                                            )}
+                                            <span className="text-blue-600">클릭하여 선택 →</span>
+                                        </div>
+                                    </div>
+                                    {useTopN && topNSelectedSymbols.length > 0 && (
+                                        <div className="mt-2 text-sm text-gray-600 truncate">
+                                            {topNSelectedSymbols.slice(0, 5).join(', ')}{topNSelectedSymbols.length > 5 ? ` 외 ${topNSelectedSymbols.length - 5}개` : ''}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {!useTopN && (
+                                    <>
+                                        {/* 검색 */}
+                                        <div className="mb-4">
+                                            <input
+                                                type="text"
+                                                placeholder="심볼 검색..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="w-full border rounded-lg px-4 py-2"
+                                            />
+                                        </div>
+
+                                        {/* 전체 선택/해제 */}
+                                        <div className="mb-3 flex justify-between items-center">
+                                            <span className="text-sm text-gray-600">
+                                                {selectedSymbols.length}개 선택됨
+                                            </span>
+                                            <button
+                                                onClick={toggleAll}
+                                                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                            >
+                                                {selectedSymbols.length === filteredSymbols.length ? '전체 해제' : '전체 선택'}
+                                            </button>
+                                        </div>
+
+                                        {/* 심볼 목록 */}
+                                        <div className="max-h-[500px] overflow-y-auto border rounded-lg relative">
+                                            {filteredSymbols.map((s, idx) => (
+                                                <div
+                                                    key={s.symbol}
+                                                    onClick={() => toggleSymbol(s.symbol)}
+                                                    onMouseEnter={(e) => handleSymbolMouseEnter(e, s.symbol)}
+                                                    onMouseLeave={handleSymbolMouseLeave}
+                                                    className={`p-3 cursor-pointer transition flex justify-between items-center ${
+                                                        idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'
+                                                    } ${
+                                                        selectedSymbols.includes(s.symbol)
+                                                            ? 'border-l-4 border-blue-600 bg-blue-50'
+                                                            : 'hover:bg-gray-100'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center space-x-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedSymbols.includes(s.symbol)}
+                                                            readOnly
+                                                            className="w-5 h-5"
+                                                        />
+                                                        <span className="font-medium">{s.symbol}</span>
+                                                    </div>
+                                                    <div className="text-sm text-gray-600">
+                                                        {s.volume ? `${(s.volume / 1e6).toFixed(1)}M` : ''}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* 심볼 데이터 통계 툴팁 */}
+                                        {hoveredSymbol && symbolStats[hoveredSymbol] && (
+                                            <div
+                                                className="fixed bg-gray-900 text-white p-3 rounded-lg shadow-xl text-xs z-50 max-w-md"
+                                                style={{ left: tooltipPos.x, top: tooltipPos.y }}
+                                            >
+                                                <div className="font-bold text-yellow-300 mb-2">{hoveredSymbol} 저장 데이터</div>
+                                                {symbolStats[hoveredSymbol].length === 0 ? (
+                                                    <div className="text-gray-400">데이터 없음</div>
+                                                ) : (
+                                                    <div className="space-y-1">
+                                                        {symbolStats[hoveredSymbol].map(yearData => (
+                                                            <div key={yearData.year} className="flex items-start gap-2">
+                                                                <span className="text-blue-300 font-bold w-10">{yearData.year}</span>
+                                                                <span className="text-gray-300">
+                                                                    {['15m', '30m', '1h', '4h', '1d']
+                                                                        .filter(tf => yearData.tf_data[tf])
+                                                                        .map(tf => `${tf}: ${formatNumber(yearData.tf_data[tf])}`)
+                                                                        .join(' / ')}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 심볼 선택 모달 */}
+                    {showTopNModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col">
+                                {/* 헤더 */}
+                                <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-4 flex justify-between items-center">
+                                    <h2 className="text-xl font-bold">🔍 심볼 검색</h2>
+                                    <button
+                                        onClick={() => setShowTopNModal(false)}
+                                        className="text-white hover:text-gray-200 text-2xl font-bold"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                {/* 정렬 옵션 탭 */}
+                                <div className="flex border-b">
+                                    <button
+                                        onClick={() => setSymbolSortMode('volume')}
+                                        className={`flex-1 py-3 px-4 font-medium transition ${
+                                            symbolSortMode === 'volume'
+                                                ? 'bg-yellow-500 text-black border-b-2 border-yellow-600'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        🔥 거래량 상위 심볼
+                                    </button>
+                                    <button
+                                        onClick={() => setSymbolSortMode('price')}
+                                        className={`flex-1 py-3 px-4 font-medium transition ${
+                                            symbolSortMode === 'price'
+                                                ? 'bg-blue-500 text-white border-b-2 border-blue-600'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        💰 가격 상위 심볼
+                                    </button>
+                                </div>
+
+                                {/* 바이낸스 업데이트 섹션 */}
+                                <div className="p-3 border-b bg-gradient-to-r from-gray-800 to-gray-900 text-white">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                            <button
+                                                onClick={fetchBinanceSymbols}
+                                                disabled={binanceLoading}
+                                                className={`px-4 py-2 rounded font-bold flex items-center space-x-2 ${
+                                                    binanceLoading
+                                                        ? 'bg-gray-600 cursor-not-allowed'
+                                                        : 'bg-yellow-500 text-black hover:bg-yellow-400'
+                                                }`}
+                                            >
+                                                {binanceLoading ? (
+                                                    <>
+                                                        <span className="animate-spin">⏳</span>
+                                                        <span>로딩중...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span>📡</span>
+                                                        <span>바이낸스에서 업데이트</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                            {binanceUpdatedAt && (
+                                                <span className="text-sm text-gray-300">
+                                                    업데이트: {binanceUpdatedAt}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center space-x-2 text-sm">
+                                            <span className={useBinanceList ? 'text-yellow-400 font-bold' : 'text-gray-400'}>
+                                                {useBinanceList ? '🔴 LIVE' : 'DB 데이터'}
+                                            </span>
+                                            <span className="text-gray-400">|</span>
+                                            <span>{topSymbolsList.length}개 심볼</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 옵션 */}
+                                <div className="p-3 border-b bg-gray-50">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="flex items-center space-x-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={useTopN}
+                                                onChange={(e) => {
+                                                    setUseTopN(e.target.checked);
+                                                    if (e.target.checked && topNSelectedSymbols.length === 0) {
+                                                        setTopNSelectedSymbols(topSymbolsList.slice(0, topN).map(s => s.symbol));
+                                                    }
+                                                }}
+                                                className="w-5 h-5"
+                                            />
+                                            <span className="font-medium">{symbolSortMode === 'volume' ? '거래량' : '가격'} 상위 심볼 사용</span>
+                                        </label>
+                                        {useTopN && (
+                                            <span className="text-sm text-gray-600 font-bold">
+                                                {topNSelectedSymbols.length}개 선택됨
+                                            </span>
+                                        )}
+                                    </div>
+                                    {useTopN && (
+                                        <div className="flex items-center space-x-2 flex-wrap gap-1">
+                                            <button
+                                                onClick={() => setTopNSelectedSymbols(topSymbolsList.slice(0, 10).map(s => s.symbol))}
+                                                className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm"
+                                            >
+                                                상위 10개
+                                            </button>
+                                            <button
+                                                onClick={() => setTopNSelectedSymbols(topSymbolsList.slice(0, 20).map(s => s.symbol))}
+                                                className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm"
+                                            >
+                                                상위 20개
+                                            </button>
+                                            <button
+                                                onClick={() => setTopNSelectedSymbols(topSymbolsList.slice(0, 50).map(s => s.symbol))}
+                                                className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm"
+                                            >
+                                                상위 50개
+                                            </button>
+                                            <button
+                                                onClick={() => setTopNSelectedSymbols(topSymbolsList.slice(0, 100).map(s => s.symbol))}
+                                                className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm"
+                                            >
+                                                상위 100개
+                                            </button>
+                                            <button
+                                                onClick={() => setTopNSelectedSymbols([])}
+                                                className="px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-sm"
+                                            >
+                                                전체 해제
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 심볼 목록 */}
+                                <div className="flex-1 overflow-y-auto p-3">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                        {topSymbolsList.slice(0, 150).map((s, idx) => (
+                                            <div
+                                                key={s.symbol}
+                                                onClick={() => {
+                                                    if (!useTopN) return;
+                                                    if (topNSelectedSymbols.includes(s.symbol)) {
+                                                        setTopNSelectedSymbols(prev => prev.filter(sym => sym !== s.symbol));
+                                                    } else {
+                                                        setTopNSelectedSymbols(prev => [...prev, s.symbol]);
+                                                    }
+                                                }}
+                                                className={`p-2 rounded cursor-pointer transition flex justify-between items-center ${
+                                                    !useTopN ? 'opacity-50 cursor-not-allowed' : ''
+                                                } ${
+                                                    topNSelectedSymbols.includes(s.symbol)
+                                                        ? 'bg-yellow-600 text-white border-2 border-yellow-400'
+                                                        : 'bg-gray-100 hover:bg-gray-200 border-2 border-transparent'
+                                                }`}
+                                            >
+                                                <div className="flex items-center space-x-2">
+                                                    <span className={`text-xs w-5 ${topNSelectedSymbols.includes(s.symbol) ? 'text-yellow-200' : 'text-gray-400'}`}>{idx + 1}</span>
+                                                    <span className="font-medium text-sm">{s.symbol.replace('USDT', '')}</span>
+                                                </div>
+                                                <div className="flex items-center space-x-2 text-xs">
+                                                    {s.priceChangePercent !== undefined && (
+                                                        <span className={
+                                                            topNSelectedSymbols.includes(s.symbol)
+                                                                ? (s.priceChangePercent >= 0 ? 'text-green-300' : 'text-red-300')
+                                                                : (s.priceChangePercent >= 0 ? 'text-green-600' : 'text-red-600')
+                                                        }>
+                                                            {s.priceChangePercent >= 0 ? '+' : ''}{s.priceChangePercent.toFixed(1)}%
+                                                        </span>
+                                                    )}
+                                                    <span className={topNSelectedSymbols.includes(s.symbol) ? 'text-yellow-200' : 'text-gray-500'}>
+                                                        {s.volume >= 1e9
+                                                            ? `${(s.volume / 1e9).toFixed(1)}B`
+                                                            : `${(s.volume / 1e6).toFixed(0)}M`}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 푸터 */}
+                                <div className="p-4 border-t bg-gray-50 flex justify-between">
+                                    <button
+                                        onClick={async () => {
+                                            if (topNSelectedSymbols.length === 0) {
+                                                showToast('선택된 심볼이 없습니다.', 'warning');
+                                                return;
+                                            }
+                                            // 현재 선택된 전략 가져오기 (selectedStrategies 상태 사용)
+                                            if (selectedStrategies.length === 0) {
+                                                showToast('선택된 전략이 없습니다. 전략을 먼저 선택해주세요.', 'warning');
+                                                return;
+                                            }
+                                            const strategiesStr = selectedStrategies.join(',');
+
+                                            try {
+                                                const tfStr = timeframes.join(',');
+                                                const response = await fetch('/api/watch_symbols', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                        symbols: topNSelectedSymbols,
+                                                        timeframe: tfStr,
+                                                        strategies: strategiesStr,
+                                                        notes: `${symbolSortMode === 'volume' ? '거래량' : '가격'} 상위 ${topNSelectedSymbols.length}개 심볼 자동 등록`
+                                                    })
+                                                });
+                                                const result = await response.json();
+                                                if (result.success) {
+                                                    showToast(`✅ ${result.added}개 심볼이 실시간 분석에 등록되었습니다. (전략: ${strategiesStr})`, 'success', 5000);
+                                                } else {
+                                                    showToast(`❌ 등록 실패: ${result.error || '알 수 없는 오류'}`, 'error');
+                                                }
+                                            } catch (err) {
+                                                showToast(`❌ 등록 실패: ${err.message}`, 'error');
+                                            }
+                                        }}
+                                        disabled={topNSelectedSymbols.length === 0}
+                                        className={`px-4 py-2 rounded font-bold flex items-center space-x-2 ${
+                                            topNSelectedSymbols.length === 0
+                                                ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                                                : 'bg-green-600 text-white hover:bg-green-500'
+                                        }`}
+                                    >
+                                        <span>📡</span>
+                                        <span>실시간 분석으로 등록 ({topNSelectedSymbols.length}개)</span>
+                                    </button>
+                                    <div className="flex space-x-2">
+                                        <button
+                                            onClick={() => {
+                                                setUseTopN(false);
+                                                setTopNSelectedSymbols([]);
+                                                setShowTopNModal(false);
+                                            }}
+                                            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                                        >
+                                            사용 안함
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (topNSelectedSymbols.length > 0) {
+                                                    setUseTopN(true);
+                                                    setTopN(topNSelectedSymbols.length);
+                                                }
+                                                setShowTopNModal(false);
+                                            }}
+                                            className="px-4 py-2 bg-yellow-500 text-black rounded hover:bg-yellow-600 font-bold"
+                                        >
+                                            확인 ({topNSelectedSymbols.length}개)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 결과 모달 */}
+                    {showResults && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                                {/* 헤더 */}
+                                <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 flex justify-between items-center">
+                                    <h2 className="text-2xl font-bold">📊 백테스트 결과</h2>
+                                    <button
+                                        onClick={() => setShowResults(false)}
+                                        className="text-white hover:text-gray-200 text-2xl font-bold"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                {/* 전체 요약 */}
+                                {sortedResults.length > 1 && (
+                                    <div className="p-6 bg-gray-50 border-b">
+                                        <h3 className="font-bold text-lg mb-3">📈 전체 요약</h3>
+                                        <div className="grid grid-cols-5 gap-4">
+                                            <div className="bg-white p-3 rounded shadow">
+                                                <div className="text-sm text-gray-600">테스트 수</div>
+                                                <div className="text-2xl font-bold">{sortedResults.length}</div>
+                                            </div>
+                                            <div className="bg-white p-3 rounded shadow">
+                                                <div className="text-sm text-gray-600">평균 수익률</div>
+                                                <div className={`text-2xl font-bold ${
+                                                    sortedResults.reduce((acc, r) => acc + r.total_pnl_pct, 0) / sortedResults.length > 0
+                                                        ? 'text-green-600' : 'text-red-600'
+                                                }`}>
+                                                    {(sortedResults.reduce((acc, r) => acc + r.total_pnl_pct, 0) / sortedResults.length).toFixed(2)}%
+                                                </div>
+                                            </div>
+                                            <div className="bg-white p-3 rounded shadow">
+                                                <div className="text-sm text-gray-600">평균 승률</div>
+                                                <div className="text-2xl font-bold">
+                                                    {(sortedResults.reduce((acc, r) => acc + r.win_rate, 0) / sortedResults.length).toFixed(1)}%
+                                                </div>
+                                            </div>
+                                            <div className="bg-white p-3 rounded shadow">
+                                                <div className="text-sm text-gray-600">평균 샤프</div>
+                                                <div className="text-2xl font-bold">
+                                                    {(sortedResults.reduce((acc, r) => acc + r.sharpe_ratio, 0) / sortedResults.length).toFixed(2)}
+                                                </div>
+                                            </div>
+                                            <div className="bg-white p-3 rounded shadow">
+                                                <div className="text-sm text-gray-600">전략 수</div>
+                                                <div className="text-2xl font-bold">
+                                                    {[...new Set(sortedResults.map(r => r.strategy))].length}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* 분석 대상 추가 */}
+                                        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                                            <h4 className="font-bold mb-2">👁️ 분석 대상에 추가</h4>
+                                            <div className="grid grid-cols-4 gap-3 mb-3">
+                                                <div>
+                                                    <label className="block text-xs text-gray-600 mb-1">최소 수익률 (%)</label>
+                                                    <input
+                                                        type="number"
+                                                        value={watchFilters.minPnlPct}
+                                                        onChange={(e) => setWatchFilters({...watchFilters, minPnlPct: Number(e.target.value)})}
+                                                        className="w-full border rounded px-2 py-1 text-sm"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-600 mb-1">최소 승률 (%)</label>
+                                                    <input
+                                                        type="number"
+                                                        value={watchFilters.minWinRate}
+                                                        onChange={(e) => setWatchFilters({...watchFilters, minWinRate: Number(e.target.value)})}
+                                                        className="w-full border rounded px-2 py-1 text-sm"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-600 mb-1">최소 PF</label>
+                                                    <input
+                                                        type="number"
+                                                        value={watchFilters.minProfitFactor}
+                                                        onChange={(e) => setWatchFilters({...watchFilters, minProfitFactor: Number(e.target.value)})}
+                                                        className="w-full border rounded px-2 py-1 text-sm"
+                                                        step="0.1"
+                                                    />
+                                                </div>
+                                                <div className="flex items-end">
+                                                    <button
+                                                        onClick={addToWatchList}
+                                                        disabled={filteredResults.length === 0}
+                                                        className={`w-full py-1.5 rounded font-medium text-sm ${
+                                                            filteredResults.length > 0
+                                                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                        }`}
+                                                    >
+                                                        {filteredResults.length}개 추가
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 결과 목록 */}
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    <div className="space-y-4">
+                                        {sortedResults.map((result, idx) => (
+                                            <ResultCard key={idx} result={result} rank={idx + 1} onAddToWatch={addSingleSymbolToWatch} />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Watch Symbols 모달 */}
+                    {showWatchModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+                                <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white p-6 flex justify-between items-center">
+                                    <h2 className="text-2xl font-bold">👁️ 분석 대상 심볼</h2>
+                                    <button
+                                        onClick={() => setShowWatchModal(false)}
+                                        className="text-white hover:text-gray-200 text-2xl font-bold"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    {watchSymbols.length === 0 ? (
+                                        <div className="text-center text-gray-500 py-8">
+                                            <p className="text-4xl mb-4">📭</p>
+                                            <p>분석 대상 심볼이 없습니다.</p>
+                                            <p className="text-sm">백테스트 결과에서 심볼을 추가하세요.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {watchSymbols.map((s, idx) => (
+                                                <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold">{s.symbol}</span>
+                                                            <span className="text-xs text-gray-500">({s.source})</span>
+                                                        </div>
+                                                        {s.strategies && (
+                                                            <div className="flex gap-1 mt-1">
+                                                                {s.strategies.split(',').map((strat, i) => (
+                                                                    <span key={i} className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
+                                                                        {strat}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        {s.notes && <p className="text-xs text-gray-400 mt-1">{s.notes}</p>}
+                                                    </div>
+                                                    <button
+                                                        onClick={async () => {
+                                                            await fetch(`/api/watch_symbols/${s.symbol}`, { method: 'DELETE' });
+                                                            fetchWatchSymbols();
+                                                        }}
+                                                        className="text-red-500 hover:text-red-700"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 차트 모달 */}
+                    {showChart && selectedResultForChart && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-2xl max-w-7xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+                                <div className="bg-gradient-to-r from-green-600 to-blue-600 text-white p-5 flex justify-between items-center">
+                                    <h2 className="text-xl font-bold">
+                                        📈 {selectedResultForChart.symbol} {selectedResultForChart.tf} - {selectedResultForChart.strategy}
+                                    </h2>
+                                    <button
+                                        onClick={() => {
+                                            setShowChart(false);
+                                            setSelectedResultForChart(null);
+                                            setChartData(null);
+                                        }}
+                                        className="text-white hover:text-gray-200 text-2xl font-bold"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    {chartData ? (
+                                        <div className="space-y-4">
+                                            {/* 차트 */}
+                                            <div className="bg-white border rounded-lg p-4">
+                                                <div id="backtest-chart" style={{ width: '100%', height: '600px', minHeight: '600px' }}></div>
+                                            </div>
+
+                                            {/* 거래 테이블 */}
+                                            {selectedResultForChart.trades && selectedResultForChart.trades.length > 0 && (
+                                                <div className="bg-white border rounded-lg p-4">
+                                                    <h3 className="text-lg font-bold mb-4">📋 거래 내역</h3>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-sm">
+                                                            <thead className="bg-gray-100">
+                                                                <tr>
+                                                                    <th className="px-3 py-2 text-left">진입 시간</th>
+                                                                    <th className="px-3 py-2 text-left">진입가</th>
+                                                                    <th className="px-3 py-2 text-left">방향</th>
+                                                                    <th className="px-3 py-2 text-left">청산 시간</th>
+                                                                    <th className="px-3 py-2 text-left">청산가</th>
+                                                                    <th className="px-3 py-2 text-left">청산 사유</th>
+                                                                    <th className="px-3 py-2 text-right">PnL</th>
+                                                                    <th className="px-3 py-2 text-right">PnL %</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {selectedResultForChart.trades.map((trade, idx) => (
+                                                                    <tr key={idx} className={`border-b ${trade.pnl >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                                                                        <td className="px-3 py-2">{new Date(trade.entry_time).toLocaleString('ko-KR')}</td>
+                                                                        <td className="px-3 py-2 font-mono">${trade.entry_price.toFixed(2)}</td>
+                                                                        <td className="px-3 py-2">
+                                                                            <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                                                                trade.direction === 'long' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+                                                                            }`}>
+                                                                                {trade.direction === 'long' ? 'LONG' : 'SHORT'}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-3 py-2">{trade.exit_time ? new Date(trade.exit_time).toLocaleString('ko-KR') : '-'}</td>
+                                                                        <td className="px-3 py-2 font-mono">${trade.exit_price ? trade.exit_price.toFixed(2) : '-'}</td>
+                                                                        <td className="px-3 py-2">
+                                                                            <span className="text-xs px-2 py-1 bg-gray-200 rounded">
+                                                                                {trade.exit_reason || '-'}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className={`px-3 py-2 text-right font-mono font-bold ${
+                                                                            trade.pnl >= 0 ? 'text-green-600' : 'text-red-600'
+                                                                        }`}>
+                                                                            {trade.pnl !== null ? (trade.pnl >= 0 ? '+' : '') + trade.pnl.toFixed(2) : '-'}
+                                                                        </td>
+                                                                        <td className={`px-3 py-2 text-right font-mono font-bold ${
+                                                                            trade.pnl_pct >= 0 ? 'text-green-600' : 'text-red-600'
+                                                                        }`}>
+                                                                            {trade.pnl_pct !== null ? (trade.pnl_pct >= 0 ? '+' : '') + trade.pnl_pct.toFixed(2) + '%' : '-'}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8">
+                                            <div className="animate-spin text-4xl mb-4">⏳</div>
+                                            <p>차트 데이터 로딩 중...</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 전략 설정 모달 */}
+                    {showStrategySettings && editingStrategyConfig && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col">
+                                <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-5 flex justify-between items-center">
+                                    <h2 className="text-xl font-bold">⚙️ {editingStrategyConfig} 설정</h2>
+                                    <button
+                                        onClick={() => {
+                                            setShowStrategySettings(false);
+                                            setEditingStrategyConfig(null);
+                                        }}
+                                        className="text-white hover:text-gray-200 text-2xl font-bold"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-6">
+                                    {Object.keys(getStrategyParams(editingStrategyConfig)).length > 0 ? (
+                                        <StrategyConfigForm
+                                            strategyName={editingStrategyConfig}
+                                            params={getStrategyParams(editingStrategyConfig)}
+                                            currentConfig={strategyConfigs[editingStrategyConfig] || {}}
+                                            onSave={(config) => {
+                                                saveStrategyConfig(editingStrategyConfig, config);
+                                                setShowStrategySettings(false);
+                                                setEditingStrategyConfig(null);
+                                            }}
+                                            onCancel={() => {
+                                                setShowStrategySettings(false);
+                                                setEditingStrategyConfig(null);
+                                            }}
+                                        />
+                                    ) : (
+                                        <div className="text-center text-gray-500 py-8">
+                                            <p>이 전략의 설정 폼이 정의되지 않았습니다.</p>
+                                            <p className="text-sm mt-2">스키마 로딩 중이거나 정의되지 않았습니다.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // 전략 설정 폼 컴포넌트
+        function StrategyConfigForm({ strategyName, params, currentConfig, onSave, onCancel }) {
+            const [formData, setFormData] = useState(() => {
+                const initial = {};
+                // params에 있는 모든 키에 대해 초기화
+                Object.keys(params).forEach(key => {
+                    initial[key] = currentConfig[key] !== undefined ? currentConfig[key] : params[key].default;
+                });
+                // enabled가 스키마에 없더라도(혹은 누락) UI에서 토글 가능하도록 기본값 부여
+                if (initial.enabled === undefined && currentConfig?.enabled !== undefined) {
+                    initial.enabled = currentConfig.enabled;
+                }
+                if (initial.enabled === undefined) {
+                    initial.enabled = true;
+                }
+                // EMA Cross 청산 규칙 기본값 보장
+                if (strategyName === 'ema_cross') {
+                    if (initial.tp1_partial_exit_pct === undefined) initial.tp1_partial_exit_pct = 50.0;
+                    if (initial.use_trailing_stop === undefined) initial.use_trailing_stop = true;
+                    if (initial.exit_on_ema50_touch === undefined) initial.exit_on_ema50_touch = true;
+                }
+                return initial;
+            });
+
+            const handleChange = (key, value, type) => {
+                let parsedValue = value;
+                if (type === 'number') {
+                    parsedValue = parseFloat(value);
+                } else if (type === 'checkbox') {
+                    parsedValue = value;
+                }
+                setFormData(prev => ({ ...prev, [key]: parsedValue }));
+            };
+
+            const handleSubmit = () => {
+                onSave(formData);
+            };
+
+            const handleReset = () => {
+                const defaults = {};
+                Object.keys(params).forEach(key => {
+                    defaults[key] = params[key].default;
+                });
+                setFormData(defaults);
+            };
+
+            // EMA Cross 청산 규칙 설정 키 목록
+            const emaCrossExitKeys = ['tp1_partial_exit_pct', 'use_trailing_stop', 'exit_on_ema50_touch'];
+            const isEmaCross = strategyName === 'ema_cross';
+            
+            // EMA Cross인 경우 기본값에서 청산 규칙 추가 보장 (params 객체 직접 수정)
+            if (isEmaCross) {
+                // defaultStrategyParams는 BacktestApp 컴포넌트 스코프에 있으므로 직접 참조 불가
+                // 대신 getStrategyParams를 통해 가져온 params에 청산 규칙이 없으면 추가
+                const defaultEmaCrossParams = {
+                    tp1_partial_exit_pct: { label: 'TP1 부분 청산 비율 (%)', type: 'number', min: 0, max: 100, step: 5, default: 50.0 },
+                    use_trailing_stop: { label: 'TP2 트레일링 스톱 사용', type: 'checkbox', default: true },
+                    exit_on_ema50_touch: { label: 'EMA50 터치 시 청산', type: 'checkbox', default: true }
+                };
+                emaCrossExitKeys.forEach(key => {
+                    if (!params[key] && defaultEmaCrossParams[key]) {
+                        params[key] = defaultEmaCrossParams[key];
+                    }
+                });
+            }
+            
+            // 일반 설정과 청산 규칙 설정 분리
+            const regularParams = Object.entries(params).filter(([key]) => 
+                key !== 'enabled' && (!isEmaCross || !emaCrossExitKeys.includes(key))
+            );
+            const exitParams = isEmaCross ? Object.entries(params).filter(([key]) => 
+                emaCrossExitKeys.includes(key)
+            ) : [];
+
+            return (
+                <div className="space-y-4">
+                    {/* tradeBot 스타일: Enabled 토글을 상단에 고정 */}
+                    <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50">
+                        <div>
+                            <div className="text-sm font-bold text-gray-800">Enabled</div>
+                            <div className="text-xs text-gray-500">OFF이면 백테스트/분석에서 이 전략은 실행되지 않습니다.</div>
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <span className={`text-xs font-bold ${formData.enabled ? 'text-green-700' : 'text-red-700'}`}>
+                                {formData.enabled ? 'ON' : 'OFF'}
+                            </span>
+                            <input
+                                type="checkbox"
+                                checked={!!formData.enabled}
+                                onChange={(e) => handleChange('enabled', e.target.checked, 'checkbox')}
+                                className="w-5 h-5"
+                            />
+                        </label>
+                    </div>
+
+                    {/* 일반 설정 */}
+                    {regularParams.map(([key, config]) => (
+                        <div key={key} className="flex items-center justify-between py-2 border-b border-gray-100">
+                            <label className="text-sm font-medium text-gray-700">{config.label}</label>
+
+                            {config.type === 'checkbox' ? (
+                                <input
+                                    type="checkbox"
+                                    checked={formData[key]}
+                                    onChange={(e) => handleChange(key, e.target.checked, 'checkbox')}
+                                    className="w-5 h-5"
+                                />
+                            ) : config.type === 'select' ? (
+                                <select
+                                    value={formData[key]}
+                                    onChange={(e) => handleChange(key, e.target.value, 'select')}
+                                    className="px-3 py-1.5 border rounded-lg text-sm w-32"
+                                >
+                                    {config.options.map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <input
+                                    type="number"
+                                    value={formData[key]}
+                                    onChange={(e) => handleChange(key, e.target.value, 'number')}
+                                    min={config.min}
+                                    max={config.max}
+                                    step={config.step}
+                                    className="px-3 py-1.5 border rounded-lg text-sm w-32 text-right"
+                                />
+                            )}
+                        </div>
+                    ))}
+
+                    {/* EMA Cross 청산 규칙 설정 섹션 */}
+                    {isEmaCross && exitParams.length > 0 && (
+                        <div className="mt-6 pt-4 border-t-2 border-blue-200">
+                            <div className="mb-3">
+                                <h3 className="text-sm font-bold text-blue-700 mb-1">🔄 청산 규칙 설정</h3>
+                                <p className="text-xs text-gray-500">TP1 부분 청산, TP2 트레일링 스톱, EMA50 터치 청산 설정</p>
+                            </div>
+                            {exitParams.map(([key, config]) => (
+                                <div key={key} className="flex items-center justify-between py-2 border-b border-gray-100">
+                                    <label className="text-sm font-medium text-gray-700">{config.label}</label>
+
+                                    {config.type === 'checkbox' ? (
+                                        <input
+                                            type="checkbox"
+                                            checked={formData[key]}
+                                            onChange={(e) => handleChange(key, e.target.checked, 'checkbox')}
+                                            className="w-5 h-5"
+                                        />
+                                    ) : (
+                                        <input
+                                            type="number"
+                                            value={formData[key]}
+                                            onChange={(e) => handleChange(key, e.target.value, 'number')}
+                                            min={config.min}
+                                            max={config.max}
+                                            step={config.step}
+                                            className="px-3 py-1.5 border rounded-lg text-sm w-32 text-right"
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="flex justify-between pt-4 border-t">
+                        <button
+                            onClick={handleReset}
+                            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border rounded-lg"
+                        >
+                            기본값 복원
+                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onCancel}
+                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border rounded-lg"
+                            >
+                                취소
+                            </button>
+                            <button
+                                onClick={handleSubmit}
+                                className="px-4 py-2 text-sm text-white rounded-lg"
+                                style={{ background: '#c99a09' }}
+                            >
+                                저장
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // 차트 표시 함수 (전역으로 노출)
+        window.showChartModal = (result) => {
+            // BacktestApp 컴포넌트의 상태 업데이트를 위해 이벤트 사용
+            window.dispatchEvent(new CustomEvent('showChart', { detail: result }));
+        };
+
+        // 결과 카드 컴포넌트
+        function ResultCard({ result, rank, onAddToWatch }) {
+            const [expanded, setExpanded] = useState(false);
+
+            // 전략별 색상
+            const strategyColors = {
+                'keltner_ict_turtle': 'bg-purple-100 text-purple-800',
+                'ema_cross': 'bg-blue-100 text-blue-800',
+                'ict': 'bg-green-100 text-green-800',
+                'rsi': 'bg-yellow-100 text-yellow-800',
+                'bollinger': 'bg-red-100 text-red-800'
+            };
+
+            return (
+                <div className="bg-white border-2 border-gray-200 rounded-lg shadow hover:shadow-lg transition">
+                    {/* 요약 */}
+                    <div
+                        onClick={() => setExpanded(!expanded)}
+                        className="p-4 cursor-pointer"
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                                {rank <= 3 && (
+                                    <div className="text-2xl">
+                                        {rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}
+                                    </div>
+                                )}
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h4 className="text-xl font-bold">{result.symbol}</h4>
+                                        <span className="text-sm text-gray-500">{result.tf}</span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${strategyColors[result.strategy] || 'bg-gray-100'}`}>
+                                            {result.strategy}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-gray-600">
+                                        {result.start_date} ~ {result.end_date}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                    <div className={`text-3xl font-bold ${
+                                        result.total_pnl_pct > 0 ? 'text-green-600' : 'text-red-600'
+                                    }`}>
+                                        {result.total_pnl_pct > 0 ? '+' : ''}{result.total_pnl_pct.toFixed(2)}%
+                                    </div>
+                                    <div className="text-sm text-gray-600">
+                                        ${result.total_pnl.toFixed(2)}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {/* 차트 버튼 (심볼 하나만 선택했을 때만 표시) */}
+                                    {result.trades && result.trades.length > 0 && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (window.showChartModal) {
+                                                    window.showChartModal(result);
+                                                }
+                                            }}
+                                            className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium"
+                                            title="차트 보기"
+                                        >
+                                            📈 차트
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onAddToWatch(result.symbol, result.strategy);
+                                        }}
+                                        className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
+                                        title="분석 대상에 추가"
+                                    >
+                                        + 추가
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 주요 지표 */}
+                        <div className="grid grid-cols-5 gap-4 mt-4">
+                            <div>
+                                <div className="text-xs text-gray-600">승률</div>
+                                <div className="font-bold">{result.win_rate.toFixed(1)}%</div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-gray-600">총 거래</div>
+                                <div className="font-bold">{result.total_trades}</div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-gray-600">샤프</div>
+                                <div className="font-bold">{result.sharpe_ratio.toFixed(2)}</div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-gray-600">MDD</div>
+                                <div className="font-bold text-red-600">{result.max_drawdown_pct.toFixed(2)}%</div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-gray-600">PF</div>
+                                <div className="font-bold">{result.profit_factor.toFixed(2)}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 상세 정보 */}
+                    {expanded && (
+                        <div className="border-t p-4 bg-gray-50">
+                            <div className="grid grid-cols-2 gap-6">
+                                <div>
+                                    <h5 className="font-bold mb-2">📊 거래 통계</h5>
+                                    <div className="space-y-1 text-sm">
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">승리/패배:</span>
+                                            <span className="font-medium">{result.winning_trades} / {result.losing_trades}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">평균 수익:</span>
+                                            <span className="font-medium text-green-600">${result.avg_win.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">평균 손실:</span>
+                                            <span className="font-medium text-red-600">${result.avg_loss.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">최대 수익:</span>
+                                            <span className="font-medium text-green-600">${result.max_win.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">최대 손실:</span>
+                                            <span className="font-medium text-red-600">${result.max_loss.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h5 className="font-bold mb-2">💰 자본 변화</h5>
+                                    <div className="space-y-1 text-sm">
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">초기 자본:</span>
+                                            <span className="font-medium">${result.initial_capital.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">최종 자본:</span>
+                                            <span className="font-medium">${result.final_capital.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">최대 낙폭:</span>
+                                            <span className="font-medium text-red-600">${result.max_drawdown.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // 앱 렌더링
+        ReactDOM.render(<BacktestApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>

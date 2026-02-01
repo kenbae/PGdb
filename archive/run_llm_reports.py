@@ -10,27 +10,6 @@
 
 import os
 import sys
-import io
-
-# ============================================================
-# Windows UTF-8 설정 (인코딩 오류 방지)
-# ============================================================
-if sys.platform == 'win32':
-    # stdout을 UTF-8로 래핑
-    sys.stdout = io.TextIOWrapper(
-        sys.stdout.buffer, 
-        encoding='utf-8', 
-        errors='replace',
-        line_buffering=True
-    )
-    # stderr도 UTF-8로 래핑
-    sys.stderr = io.TextIOWrapper(
-        sys.stderr.buffer, 
-        encoding='utf-8', 
-        errors='replace',
-        line_buffering=True
-    )
-
 import json
 import argparse
 import datetime as _dt
@@ -1053,16 +1032,9 @@ def build_run_parser(ap: argparse.ArgumentParser) -> None:
                     help="rag: generate stage=pre_rag only (operational). legacy: generate stage=pre only.")
 
     ap.add_argument("--only-symbol", type=str, default="", help="Run only for this symbol (e.g., BTCUSDT).")
-    
-    # NEW: 프로세스 매니저용 심볼 옵션
-    ap.add_argument("--symbols", type=str, default="", help="Comma-separated symbols (e.g., BTCUSDT,ETHUSDT)")
-    
-    # NEW: 재생성 옵션
-    ap.add_argument("--regenerate", action="store_true", help="Delete ALL existing reports before generating")
-    ap.add_argument("--regenerate-symbol", type=str, default="", help="Delete reports for specific symbol before generating")
 
     # Speed controls
-    ap.add_argument("--workers", type=int, default=1, help="Parallel workers (default: 1=sequential, >1=parallel)")
+    ap.add_argument("--workers", type=int, default=4, help="Parallel workers for LLM generation (rag pre stage).")
     ap.add_argument("--commit-every", type=int, default=20, help="Commit every N DB writes (0=commit each write).")
     ap.add_argument("--timeout-llm", type=int, default=240, help="Ollama generate timeout seconds.")
     ap.add_argument("--timeout-embed", type=int, default=120, help="Ollama embedding timeout seconds.")
@@ -1694,76 +1666,23 @@ def main():
 
     conn = pg_connect(dsn)
     stage_missing = "pre_rag" if args.mode == "rag" else "pre"
-    
-    # NEW: 재생성 로직
-    if args.regenerate or args.regenerate_symbol:
-        t_reports = table_cfg.get("llm_reports", "llm_reports")
-        
-        if args.regenerate:
-            print(f"[WARNING] --regenerate: Deleting ALL existing reports from {t_reports}...")
-            with conn.cursor() as cur:
-                cur.execute(f"DELETE FROM {t_reports}")
-                deleted = cur.rowcount
-                conn.commit()
-            print(f"[OK] Deleted {deleted} reports")
-        
-        elif args.regenerate_symbol:
-            sym = args.regenerate_symbol.strip().upper()
-            print(f"[WARNING] --regenerate-symbol: Deleting reports for {sym} from {t_reports}...")
-            with conn.cursor() as cur:
-                cur.execute(f"DELETE FROM {t_reports} WHERE symbol = %s", (sym,))
-                deleted = cur.rowcount
-                conn.commit()
-            print(f"[OK] Deleted {deleted} reports for {sym}")
-    
-    # NEW: 심볼 필터 처리
-    symbol_filter = None
-    if args.symbols:
-        symbol_filter = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
-        print(f"[INFO] Symbol filter (--symbols): {symbol_filter}")
-    elif args.only_symbol:
-        symbol_filter = [args.only_symbol.strip().upper()]
-        print(f"[INFO] Symbol filter (--only-symbol): {symbol_filter}")
-    elif args.regenerate_symbol:
-        # --regenerate-symbol 사용 시 해당 심볼만 처리
-        symbol_filter = [args.regenerate_symbol.strip().upper()]
-        print(f"[INFO] Symbol filter (--regenerate-symbol): {symbol_filter}")
 
     force_last = int(args.force_last or 0)
-    
-    # --regenerate 또는 --regenerate-symbol 사용 시 자동으로 강제 재생성
-    if args.regenerate or args.regenerate_symbol:
-        if force_last <= 0:
-            # --regenerate-symbol인 경우 해당 심볼의 모든 신호를 가져오기 위해 큰 값 설정
-            if args.regenerate_symbol:
-                force_last = 1000  # 해당 심볼의 모든 신호
-            else:
-                force_last = max(int(limit or 50), 1)
-        print(f"[INFO] Auto-enabling force regeneration (force_last={force_last})")
     # --force: regenerate even if stage exists (overwrite by candle unique key).
-    elif args.force and force_last <= 0:
+    if args.force and force_last <= 0:
         force_last = max(int(limit or 50), 1)
 
     if force_last > 0:
-        print(f"[DEBUG] Fetching recent signals (limit={force_last})...")
         pending = fetch_recent_signals(conn, table_cfg, limit=force_last)
-        print(f"[DEBUG] Found {len(pending)} recent signals before filtering")
     else:
         pending = fetch_pending_signals(conn, table_cfg, limit=limit, stage_missing=stage_missing)
 
-    # 심볼 필터 적용
-    if symbol_filter:
-        print(f"[DEBUG] Applying symbol filter: {symbol_filter}")
-        before_count = len(pending)
-        pending = [ev for ev in pending if str(ev.get("symbol", "")).upper() in symbol_filter]
-        print(f"[DEBUG] Filtered {before_count} -> {len(pending)} signals for {symbol_filter}")
-        
-        if len(pending) > 0:
-            print(f"[DEBUG] Sample signals: {[(ev.get('symbol'), ev.get('tf'), ev.get('open_time')) for ev in pending[:3]]}")
+    if args.only_symbol:
+        sym = args.only_symbol.strip().upper()
+        pending = [ev for ev in pending if str(ev.get("symbol", "")).upper() == sym]
 
     if not pending:
-        print(f"[WARN] No signals found for {symbol_filter if symbol_filter else 'any symbol'}")
-        print(f"[WARN] Make sure HBARUSDT signals exist in the signals table")
+        print(f"[OK] No pending signals (stage='{stage_missing}' reports already exist)." + (" (use --force or --force-last to regenerate)" if not args.force else ""))
         conn.close()
         return
 
@@ -1777,7 +1696,7 @@ def main():
     print(
         f"[INFO] mode={args.mode} stage_missing={stage_missing} signals={len(pending)} "
         f"llm_model={llm_model} embed={emb_enabled} embed_model={embed_model} topk={topk} "
-        f"force_last={force_last} force_stage={args.force_stage} symbol_filter={symbol_filter or 'None'} "
+        f"force_last={force_last} force_stage={args.force_stage} only_symbol={args.only_symbol or '-'} "
         f"workers={args.workers} commit_every={args.commit_every}"
     )
 

@@ -1,0 +1,193 @@
+<!-- 
+이 코드를 dashboard.html의 <script> 섹션 시작 부분에 추가하세요
+(약 300번째 줄 근처, 첫 번째 <script> 태그 직후)
+-->
+
+<script>
+// ============================================================
+// 위젯 크기 조정 기능
+// ============================================================
+
+// 위젯 크기 저장소
+let widgetSizeConfig = {};
+
+// LocalStorage에서 크기 설정 로드
+function loadWidgetSizeConfig() {
+    const saved = localStorage.getItem('widgetSizeConfig');
+    if (saved) {
+        try {
+            widgetSizeConfig = JSON.parse(saved);
+            console.log('위젯 크기 설정 로드됨:', widgetSizeConfig);
+        } catch (e) {
+            console.error('위젯 크기 설정 로드 실패:', e);
+            widgetSizeConfig = {};
+        }
+    }
+}
+
+// LocalStorage에 크기 설정 저장
+function saveWidgetSizeConfig() {
+    try {
+        localStorage.setItem('widgetSizeConfig', JSON.stringify(widgetSizeConfig));
+        console.log('위젯 크기 설정 저장됨:', widgetSizeConfig);
+    } catch (e) {
+        console.error('위젯 크기 설정 저장 실패:', e);
+    }
+}
+
+// 위젯에 리사이징 핸들 추가
+function addResizeHandle(card, widgetId) {
+    // 기존 핸들이 있으면 제거
+    const existingHandle = card.querySelector('.resize-handle-widget');
+    if (existingHandle) {
+        existingHandle.remove();
+    }
+    
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle-widget';
+    handle.style.cssText = `
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 20px;
+        height: 20px;
+        cursor: nwse-resize;
+        background: linear-gradient(135deg, transparent 50%, #cbd5e0 50%);
+        z-index: 10;
+    `;
+    card.appendChild(handle);
+    
+    let isResizing = false;
+    let startX, startY, startWidth, startHeight;
+    
+    handle.addEventListener('mousedown', function(e) {
+        isResizing = true;
+        card.classList.add('resizing');
+        card.style.userSelect = 'none';
+        
+        startX = e.clientX;
+        startY = e.clientY;
+        startWidth = card.offsetWidth;
+        startHeight = card.offsetHeight;
+        
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    
+    document.addEventListener('mousemove', function(e) {
+        if (!isResizing) return;
+        
+        const width = startWidth + (e.clientX - startX);
+        const height = startHeight + (e.clientY - startY);
+        
+        // 최소/최대 크기 제한
+        const finalWidth = Math.max(200, Math.min(width, window.innerWidth - 50));
+        const finalHeight = Math.max(150, Math.min(height, window.innerHeight - 100));
+        
+        card.style.width = finalWidth + 'px';
+        card.style.height = finalHeight + 'px';
+    });
+    
+    document.addEventListener('mouseup', function() {
+        if (isResizing) {
+            isResizing = false;
+            card.classList.remove('resizing');
+            card.style.userSelect = '';
+            
+            // 크기 저장
+            widgetSizeConfig[widgetId] = {
+                width: card.style.width,
+                height: card.style.height
+            };
+            saveWidgetSizeConfig();
+            
+            console.log(`위젯 ${widgetId} 크기 저장:`, widgetSizeConfig[widgetId]);
+        }
+    });
+    
+    // 호버 효과
+    handle.addEventListener('mouseenter', function() {
+        handle.style.background = 'linear-gradient(135deg, transparent 50%, #3b82f6 50%)';
+    });
+    
+    handle.addEventListener('mouseleave', function() {
+        handle.style.background = 'linear-gradient(135deg, transparent 50%, #cbd5e0 50%)';
+    });
+}
+
+// 위젯에 저장된 크기 적용
+function applyWidgetSize(card, widgetId, widgetType) {
+    const savedSize = widgetSizeConfig[widgetId];
+    
+    if (savedSize) {
+        card.style.width = savedSize.width;
+        card.style.height = savedSize.height;
+        console.log(`위젯 ${widgetId} 저장된 크기 적용:`, savedSize);
+    } else {
+        // 기본 크기 설정
+        const defaultSizes = {
+            'top10': { width: '600px', height: '400px' },
+            'ema_signals': { width: '600px', height: '400px' },
+            'large': { width: '500px', height: '350px' },
+            'medium': { width: '280px', height: '200px' },
+            'small': { width: '220px', height: '160px' }
+        };
+        
+        let size = defaultSizes['medium'];
+        if (widgetType === 'top10' || widgetType === 'ema_signals') {
+            size = defaultSizes[widgetType];
+        }
+        
+        card.style.width = size.width;
+        card.style.height = size.height;
+        console.log(`위젯 ${widgetId} 기본 크기 적용:`, size);
+    }
+    
+    // 추가 스타일
+    card.style.minWidth = '200px';
+    card.style.minHeight = '150px';
+    card.style.overflow = 'auto';
+    card.style.flexShrink = '0';
+}
+
+// 설정 초기화 함수
+function resetWidgetSizes() {
+    if (confirm('모든 위젯 크기를 초기화하시겠습니까?')) {
+        widgetSizeConfig = {};
+        localStorage.removeItem('widgetSizeConfig');
+        location.reload();
+    }
+}
+
+console.log('위젯 리사이징 기능 로드됨');
+</script>
+
+<style>
+/* 위젯 리사이징 스타일 */
+#widgets-container {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 1.5rem !important;
+}
+
+#widgets-container .widget-card {
+    flex: 0 0 auto !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+}
+
+.widget-card.resizing {
+    border: 2px dashed #3b82f6 !important;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3) !important;
+}
+
+.resize-handle-widget {
+    transition: background 0.2s ease;
+}
+</style>
+
+<!-- 
+사용 방법:
+1. 이 코드를 dashboard.html의 <head> 섹션 끝이나 <body> 시작 부분에 추가
+2. renderWidgets() 함수 수정 (아래 참조)
+-->

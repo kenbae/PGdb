@@ -1,0 +1,127 @@
+# ============================================================
+# Crontab 설정 가이드
+# ============================================================
+
+# 1. crontab 편집
+# crontab -e
+
+# 2. 아래 내용 추가
+
+# ============================================================
+# 방법 1: 매 시간 1분과 31분에 실행 (30분마다)
+# ============================================================
+1,31 * * * * cd /path/to/your/project && /usr/bin/python3 run_pipeline.py >> logs/cron.log 2>&1
+
+# 또는 bash 스크립트 사용
+1,31 * * * * cd /path/to/your/project && /bin/bash run_pipeline.sh
+
+
+# ============================================================
+# 방법 2: 더 정교한 제어 (예: 특정 심볼만)
+# ============================================================
+# BTCUSDT만 매 30분마다 처리
+1,31 * * * * cd /path/to/your/project && /usr/bin/python3 run_pipeline.py --symbol BTCUSDT >> logs/cron_btc.log 2>&1
+
+# 여러 심볼 처리
+1,31 * * * * cd /path/to/your/project && /usr/bin/python3 run_pipeline.py --symbol BTCUSDT ETHUSDT BNBUSDT >> logs/cron_major.log 2>&1
+
+
+# ============================================================
+# 방법 3: 각 단계별로 다른 시간에 실행
+# ============================================================
+# 매 시간 1분: 데이터 수집
+1 * * * * cd /path/to/your/project && /usr/bin/python3 run_ingest.py >> logs/ingest.log 2>&1
+
+# 매 시간 3분: 지표 계산 (데이터 수집 후)
+3 * * * * cd /path/to/your/project && /usr/bin/python3 run_indicators.py >> logs/indicators.log 2>&1
+
+# 매 시간 5분: 신호 생성 (지표 계산 후)
+5 * * * * cd /path/to/your/project && /usr/bin/python3 run_signals.py >> logs/signals.log 2>&1
+
+# 매 시간 31분: 두 번째 실행
+31 * * * * cd /path/to/your/project && /usr/bin/python3 run_ingest.py >> logs/ingest.log 2>&1
+33 * * * * cd /path/to/your/project && /usr/bin/python3 run_indicators.py >> logs/indicators.log 2>&1
+35 * * * * cd /path/to/your/project && /usr/bin/python3 run_signals.py >> logs/signals.log 2>&1
+
+
+# ============================================================
+# 방법 4: systemd timer 사용 (더 강력한 방법)
+# ============================================================
+# 아래 "systemd timer 설정" 섹션 참조
+
+
+# ============================================================
+# Cron 표현식 설명
+# ============================================================
+# ┌───────────── 분 (0 - 59)
+# │ ┌───────────── 시 (0 - 23)
+# │ │ ┌───────────── 일 (1 - 31)
+# │ │ │ ┌───────────── 월 (1 - 12)
+# │ │ │ │ ┌───────────── 요일 (0 - 7) (일요일=0 또는 7)
+# │ │ │ │ │
+# * * * * * command
+
+# 예시:
+# 1,31 * * * *     : 매 시간 1분과 31분
+# */30 * * * *     : 매 30분마다 (0분, 30분)
+# 0 */2 * * *      : 2시간마다 (0시, 2시, 4시, ...)
+# 0 9-17 * * 1-5   : 평일 9시-17시 매 시간
+
+
+# ============================================================
+# 주의사항
+# ============================================================
+# 1. 절대 경로 사용
+#    - Python 인터프리터: /usr/bin/python3 (which python3로 확인)
+#    - 프로젝트 경로: /home/user/crypto-trading
+#    - 스크립트 경로: /home/user/crypto-trading/run_pipeline.py
+
+# 2. 환경 변수 설정 (필요시)
+#    SHELL=/bin/bash
+#    PATH=/usr/local/bin:/usr/bin:/bin
+#    PYTHONPATH=/path/to/your/project
+
+# 3. 로그 파일 위치
+#    - logs 디렉토리가 존재하는지 확인
+#    - 권한 확인: chmod +x run_pipeline.sh
+
+# 4. 실행 권한 부여
+#    chmod +x run_pipeline.py
+#    chmod +x run_pipeline.sh
+
+# 5. 에러 로깅
+#    >> logs/cron.log 2>&1  : 표준 출력과 에러를 모두 로그에 기록
+
+
+# ============================================================
+# 테스트
+# ============================================================
+# cron 실행 전 수동으로 테스트:
+# cd /path/to/your/project
+# python3 run_pipeline.py
+
+# cron 로그 확인:
+# tail -f logs/cron.log
+
+# cron 서비스 상태 확인:
+# sudo systemctl status cron     # Debian/Ubuntu
+# sudo systemctl status crond    # CentOS/RHEL
+
+# cron 작업 목록 확인:
+# crontab -l
+
+
+# ============================================================
+# 실제 사용 예시 (복사해서 사용)
+# ============================================================
+
+# 완성된 설정 예시 - 프로젝트 경로를 실제 경로로 변경하세요
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+PYTHONPATH=/home/ubuntu/crypto-trading
+
+# 매 시간 1분과 31분에 전체 파이프라인 실행
+1,31 * * * * cd /home/ubuntu/crypto-trading && /usr/bin/python3 run_pipeline.py >> logs/pipeline_$(date +\%Y\%m\%d).log 2>&1
+
+# 또는 매일 자정에 로그 파일 회전
+0 0 * * * find /home/ubuntu/crypto-trading/logs -name "pipeline_*.log" -mtime +7 -delete

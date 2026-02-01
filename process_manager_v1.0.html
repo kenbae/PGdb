@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로세스 매니저</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .status-running { background: #10b981; }
+        .status-stopped { background: #6b7280; }
+        .status-error { background: #ef4444; }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            color: white;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">🎛️ 프로세스 매니저</h1>
+            <p class="text-gray-600">서버 프로그램을 웹에서 관리하세요</p>
+        </div>
+
+        <!-- System Info -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">CPU 사용률</p>
+                        <p class="text-3xl font-bold text-blue-600" id="cpu-usage">-</p>
+                    </div>
+                    <div class="text-4xl">💻</div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">메모리 사용률</p>
+                        <p class="text-3xl font-bold text-green-600" id="memory-usage">-</p>
+                    </div>
+                    <div class="text-4xl">🧠</div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6" id="gpu-card" style="display: none;">
+                <div class="flex items-center justify-between">
+                    <div class="w-full">
+                        <p class="text-gray-600 text-sm">GPU 사용률</p>
+                        <p class="text-2xl font-bold text-purple-600" id="gpu-usage">-</p>
+                        <p class="text-xs text-gray-500 mt-1" id="gpu-memory">메모리: -</p>
+                        <p class="text-xs text-gray-500" id="gpu-temp">온도: -</p>
+                    </div>
+                    <div class="text-4xl">🎮</div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">디스크 사용률</p>
+                        <p class="text-3xl font-bold text-orange-600" id="disk-usage">-</p>
+                    </div>
+                    <div class="text-4xl">💾</div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm">DB 연결 수</p>
+                        <p class="text-3xl font-bold text-red-600" id="db-connections">-</p>
+                        <p class="text-xs text-gray-500 mt-1" id="db-connections-detail">활성: -</p>
+                    </div>
+                    <div class="text-4xl">🔌</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processes Grid -->
+        <div id="processes-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- 프로세스 카드가 여기에 동적으로 추가됩니다 -->
+        </div>
+    </div>
+
+    <script>
+        // API 베이스 URL
+        const API_BASE = '';
+
+        // 프로세스 목록 로드
+        async function loadProcesses() {
+            try {
+                const response = await fetch(`${API_BASE}/api/processes`);
+                const processes = await response.json();
+                
+                renderProcesses(processes);
+            } catch (error) {
+                console.error('프로세스 로드 실패:', error);
+            }
+        }
+
+        // 프로세스 렌더링
+        function renderProcesses(processes) {
+            const container = document.getElementById('processes-container');
+            
+            // 기존 입력값 저장
+            const savedInputs = {};
+            container.querySelectorAll('input[id^="symbols-"]').forEach(input => {
+                savedInputs[input.id] = input.value;
+            });
+            
+            container.innerHTML = '';
+            
+            processes.forEach(proc => {
+                const card = createProcessCard(proc);
+                container.appendChild(card);
+            });
+            
+            // DOM 업데이트 후 입력값 복원 (requestAnimationFrame 사용)
+            requestAnimationFrame(() => {
+                Object.keys(savedInputs).forEach(inputId => {
+                    const input = document.getElementById(inputId);
+                    if (input && savedInputs[inputId]) {
+                        input.value = savedInputs[inputId];
+                    }
+                });
+            });
+        }
+
+        // 프로세스 카드 생성
+        function createProcessCard(proc) {
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-lg shadow-lg p-6 transition-all hover:shadow-xl';
+            
+            const statusClass = `status-${proc.status}`;
+            const statusText = proc.status === 'running' ? '실행중' : 
+                              proc.status === 'stopped' ? '중지됨' : '오류';
+            
+            card.innerHTML = `
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="text-4xl">${proc.icon}</div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800">${proc.name}</h3>
+                            <p class="text-sm text-gray-600">${proc.description}</p>
+                        </div>
+                    </div>
+                    <span class="status-badge ${statusClass} ${proc.status === 'running' ? 'animate-pulse' : ''}">
+                        ${statusText}
+                    </span>
+                </div>
+                
+                ${proc.status === 'running' ? `
+                    <div class="mb-4 space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">PID:</span>
+                            <span class="font-mono font-bold">${proc.pid}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">CPU:</span>
+                            <span class="font-bold text-blue-600">${proc.cpu_percent}%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">메모리:</span>
+                            <span class="font-bold text-green-600">${proc.memory_mb} MB</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">가동 시간:</span>
+                            <span class="font-mono">${proc.uptime}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">시작:</span>
+                            <span class="font-mono text-xs">${proc.started_at}</span>
+                        </div>
+                        ${proc.current_symbols ? `
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">심볼:</span>
+                            <span class="font-mono text-xs text-purple-600">${proc.current_symbols}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
+                
+                ${proc.symbol_option && proc.status === 'stopped' ? `
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            심볼 필터 (선택사항)
+                        </label>
+                        <input type="text" 
+                               id="symbols-${proc.process_id}" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="예: BTCUSDT,ETHUSDT,BNBUSDT">
+                        <p class="text-xs text-gray-500 mt-1">쉼표로 구분하여 입력하세요</p>
+                    </div>
+                ` : ''}
+                
+                <div class="flex gap-2">
+                    ${proc.status === 'running' ? `
+                        <button onclick="stopProcess('${proc.process_id}')" 
+                                class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition">
+                            ⏹️ 중지
+                        </button>
+                        <button onclick="restartProcess('${proc.process_id}')" 
+                                class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition">
+                            🔄 재시작
+                        </button>
+                    ` : `
+                        <button onclick="startProcess('${proc.process_id}', ${proc.symbol_option})" 
+                                class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition">
+                            ▶️ 시작
+                        </button>
+                    `}
+                </div>
+            `;
+            
+            return card;
+        }
+
+        // 프로세스 시작
+        async function startProcess(processId, hasSymbolOption = false) {
+            try {
+                let body = {};
+                
+                // 심볼 옵션이 있으면 입력값 가져오기
+                if (hasSymbolOption) {
+                    const symbolInput = document.getElementById(`symbols-${processId}`);
+                    if (symbolInput && symbolInput.value.trim()) {
+                        body.symbols = symbolInput.value.trim();
+                    }
+                }
+                
+                const response = await fetch(`${API_BASE}/api/processes/${processId}/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showNotification(result.message, 'success');
+                    setTimeout(loadProcesses, 500);
+                } else {
+                    showNotification(result.detail || '시작 실패', 'error');
+                }
+            } catch (error) {
+                showNotification('시작 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 프로세스 중지
+        async function stopProcess(processId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/processes/${processId}/stop`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showNotification(result.message, 'success');
+                    setTimeout(loadProcesses, 500);
+                } else {
+                    showNotification(result.detail || '중지 실패', 'error');
+                }
+            } catch (error) {
+                showNotification('중지 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 프로세스 재시작
+        async function restartProcess(processId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/processes/${processId}/restart`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showNotification(result.message, 'success');
+                    setTimeout(loadProcesses, 1000);
+                } else {
+                    showNotification(result.detail || '재시작 실패', 'error');
+                }
+            } catch (error) {
+                showNotification('재시작 실패: ' + error.message, 'error');
+            }
+        }
+
+        // 시스템 정보 로드
+        async function loadSystemInfo() {
+            try {
+                const response = await fetch(`${API_BASE}/api/system`);
+                const system = await response.json();
+                
+                document.getElementById('cpu-usage').textContent = system.cpu_percent.toFixed(1) + '%';
+                document.getElementById('memory-usage').textContent = system.memory_percent.toFixed(1) + '%';
+                document.getElementById('disk-usage').textContent = system.disk_percent.toFixed(1) + '%';
+                
+                // DB 연결 수
+                const dbConnections = system.db_connections || 0;
+                const dbActive = system.db_connections_active || 0;
+                const dbMax = system.db_connections_max || 0;
+                document.getElementById('db-connections').textContent = `${dbConnections}/${dbMax}`;
+                document.getElementById('db-connections-detail').textContent = `활성: ${dbActive}`;
+                
+                // GPU 정보 (있으면 표시)
+                const gpuCard = document.getElementById('gpu-card');
+                if (system.gpu_available) {
+                    gpuCard.style.display = 'block';
+                    document.getElementById('gpu-usage').textContent = system.gpu_utilization.toFixed(1) + '%';
+                    
+                    const gpuMemUsedGB = (system.gpu_memory_used_mb / 1024).toFixed(1);
+                    const gpuMemTotalGB = (system.gpu_memory_total_mb / 1024).toFixed(1);
+                    document.getElementById('gpu-memory').textContent = 
+                        `메모리: ${gpuMemUsedGB}GB / ${gpuMemTotalGB}GB (${system.gpu_memory_percent.toFixed(1)}%)`;
+                    
+                    document.getElementById('gpu-temp').textContent = `온도: ${system.gpu_temperature}℃`;
+                    
+                    // GPU 이름을 툴팁으로 표시 (선택사항)
+                    gpuCard.title = system.gpu_name;
+                } else {
+                    gpuCard.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('시스템 정보 로드 실패:', error);
+            }
+        }
+
+        // 알림 표시
+        function showNotification(message, type = 'info') {
+            // 간단한 alert (나중에 toast로 개선 가능)
+            const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+            alert(`${icon} ${message}`);
+        }
+
+        // 사용자가 입력 중인지 확인
+        function isUserTyping() {
+            const activeElement = document.activeElement;
+            // input, textarea, select 등에 포커스가 있으면 입력 중으로 판단
+            return activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.tagName === 'SELECT'
+            );
+        }
+
+        // 초기 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProcesses();
+            loadSystemInfo();
+            
+            // 3초마다 자동 갱신 (입력 중이 아닐 때만)
+            setInterval(() => {
+                if (!isUserTyping()) {
+                    loadProcesses();
+                    loadSystemInfo();
+                } else {
+                    console.log('[Auto-refresh] Skipped - user is typing');
+                }
+            }, 3000);
+        });
+    </script>
+</body>
+</html>

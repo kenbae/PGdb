@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Trading - Trading Bot</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0b0e11;
+            --bg-secondary: #1e2329;
+            --bg-tertiary: #2b3139;
+            --text-primary: #eaecef;
+            --text-secondary: #848e9c;
+            --text-muted: #5e6673;
+            --border-color: #2b3139;
+            --green: #0ecb81;
+            --green-bg: rgba(14, 203, 129, 0.1);
+            --red: #f6465d;
+            --red-bg: rgba(246, 70, 93, 0.1);
+            --yellow: #f0b90b;
+            --blue: #1e80ff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 13px;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--yellow);
+            margin-right: 30px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            padding: 8px 0;
+            transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active {
+            color: var(--text-primary);
+        }
+        .header-right {
+            margin-left: auto;
+            display: flex;
+            gap: 12px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            border-left: 3px solid var(--border-color);
+        }
+        .stat-card.success { border-left-color: var(--green); }
+        .stat-card.info { border-left-color: var(--blue); }
+        .stat-card.warning { border-left-color: var(--yellow); }
+        .stat-card .label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        .stat-card .value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* Control Panel */
+        .control-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: var(--border-color);
+        }
+        .btn-primary {
+            background: var(--green);
+            border-color: var(--green);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0db870;
+        }
+        .btn-danger {
+            background: var(--red);
+            border-color: var(--red);
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #e5354f;
+        }
+
+        /* Chart */
+        .chart-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            height: 500px;
+        }
+
+        /* Positions Table */
+        .table-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead {
+            background: var(--bg-tertiary);
+        }
+        th {
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+        tbody tr:hover {
+            background: var(--bg-tertiary);
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-buy {
+            background: var(--green-bg);
+            color: var(--green);
+        }
+        .badge-sell {
+            background: var(--red-bg);
+            color: var(--red);
+        }
+        .pnl-positive {
+            color: var(--green);
+        }
+        .pnl-negative {
+            color: var(--red);
+        }
+
+        .status-running {
+            color: var(--green);
+            font-weight: 600;
+        }
+        .status-stopped {
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">TradeBot</div>
+        <nav class="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="/signals">Signals</a>
+            <a href="/positions">Positions</a>
+            <a href="/matching">Matching</a>
+            <a href="/paper-trading" class="active">Paper Trading</a>
+        </nav>
+        <div class="header-right">
+            <button class="btn btn-primary" id="start-btn">시작</button>
+            <button class="btn btn-danger" id="stop-btn" style="display:none;">중지</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Stats -->
+        <div class="stats-grid" id="stats">
+            <div class="stat-card">
+                <div class="label">상태</div>
+                <div class="value" id="stat-status">중지됨</div>
+            </div>
+            <div class="stat-card info">
+                <div class="label">총 자본</div>
+                <div class="value" id="stat-capital">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">총 PnL</div>
+                <div class="value" id="stat-total-pnl">$0.00</div>
+            </div>
+            <div class="stat-card success">
+                <div class="label">일일 PnL</div>
+                <div class="value" id="stat-daily-pnl">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">오픈 포지션</div>
+                <div class="value" id="stat-open-positions">0</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="label">승률</div>
+                <div class="value" id="stat-winrate">0%</div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel" id="control-panel" style="display:flex; align-items: center; gap: 12px; padding: 16px; margin-bottom: 20px;">
+            <label style="color: var(--text-secondary); font-size: 12px;">초기 자본:</label>
+            <input type="number" id="initial-capital" value="10000" min="100" step="100" 
+                   style="padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); width: 120px;">
+            
+            <label style="color: var(--text-secondary); font-size: 12px; margin-left: 12px;">심볼:</label>
+            <select id="symbol-select" style="padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); width: 150px;">
+                <option value="">전체 심볼</option>
+            </select>
+            
+            <label style="color: var(--text-secondary); font-size: 12px; margin-left: 12px;">전략:</label>
+            <select id="strategy-select" style="padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-tertiary); color: var(--text-primary); width: 150px;">
+                <option value="">전체 전략</option>
+            </select>
+            
+            <label style="color: var(--text-secondary); font-size: 12px; margin-left: 12px;">
+                <input type="checkbox" id="require-approval" style="margin-right: 6px;">
+                사용자 승인 필요
+            </label>
+        </div>
+
+        <!-- Signals Table -->
+        <div class="table-container" style="margin-bottom: 20px;">
+            <div style="padding: 12px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <h3 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0;">실시간 신호</h3>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--text-secondary);">
+                        <input type="checkbox" id="auto-entry-switch" style="width: 18px; height: 18px; cursor: pointer;">
+                        <span>자동 진입</span>
+                    </label>
+                </div>
+                <span id="signals-count" style="font-size: 12px; color: var(--text-secondary);">0개</span>
+            </div>
+            <table id="signals-table">
+                <thead>
+                    <tr>
+                        <th>시간</th>
+                        <th>Symbol</th>
+                        <th>전략</th>
+                        <th>타입</th>
+                        <th>진입가</th>
+                        <th>현재가</th>
+                        <th>손절가</th>
+                        <th>목표가</th>
+                        <th>신뢰도</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody id="signals-tbody">
+                    <tr>
+                        <td colspan="10" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            신호를 기다리는 중...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Chart -->
+        <div class="chart-container">
+            <canvas id="price-chart"></canvas>
+        </div>
+
+        <!-- Positions Table -->
+        <div class="table-container">
+            <table id="positions-table">
+                <thead>
+                    <tr>
+                        <th>Position ID</th>
+                        <th>Symbol</th>
+                        <th>Side</th>
+                        <th>Entry Price</th>
+                        <th>Quantity</th>
+                        <th>Current Price</th>
+                        <th>PnL</th>
+                        <th>PnL %</th>
+                        <th>Stop Loss</th>
+                        <th>SL %</th>
+                        <th>Take Profit</th>
+                        <th>TP %</th>
+                        <th>Opened At</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="positions-tbody">
+                    <tr>
+                        <td colspan="12" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            Paper Trading을 시작하면 포지션이 여기에 표시됩니다
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let authToken = localStorage.getItem('auth_token') || '';
+        let priceChart = null;
+        let statusInterval = null;
+        let wsConnection = null;
+        let signalsWsConnection = null;
+        let recentSignals = [];  // 최근 신호 저장 (최대 50개)
+        let priceWebSockets = {};  // 심볼별 가격 WebSocket 연결
+        let symbolPrices = {};  // 심볼별 현재 가격
+        let autoEntryEnabled = false;  // 자동 진입 활성화 여부
+        let processingSignals = new Set();  // 처리 중인 신호 추적 (중복 방지)
+        let openPositions = [];  // 현재 오픈 포지션 목록
+
+        // 초기 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            checkStatus();
+            initChart();
+            loadAvailableOptions();  // 심볼/전략 옵션 로드
+            
+            // 버튼 이벤트 리스너 등록
+            const startBtn = document.getElementById('start-btn');
+            const stopBtn = document.getElementById('stop-btn');
+            
+            if (startBtn) {
+                startBtn.addEventListener('click', function() {
+                    // Paper Trading 시작
+                    startPaperTrading();
+                });
+            }
+            
+            if (stopBtn) {
+                stopBtn.addEventListener('click', stopPaperTrading);
+            }
+            
+            // 자동 진입 스위치 이벤트
+            const autoEntrySwitch = document.getElementById('auto-entry-switch');
+            if (autoEntrySwitch) {
+                autoEntrySwitch.addEventListener('change', function() {
+                    autoEntryEnabled = this.checked;
+                    updateAutoEntrySetting(autoEntryEnabled);
+                });
+            }
+        });
+
+        // 상태 확인
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/paper/status', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.running) {
+                        document.getElementById('start-btn').style.display = 'none';
+                        document.getElementById('stop-btn').style.display = 'inline-block';
+                        document.getElementById('stat-status').textContent = '실행 중';
+                        document.getElementById('stat-status').className = 'value status-running';
+                        
+                        // Control Panel 비활성화 (실행 중에는 수정 불가)
+                        const controlPanel = document.getElementById('control-panel');
+                        if (controlPanel) {
+                            controlPanel.style.opacity = '0.6';
+                            controlPanel.style.pointerEvents = 'none';
+                        }
+                        
+                        updateStats(result.stats);
+                        openPositions = result.open_positions || [];  // 오픈 포지션 저장
+                        renderPositions(result.open_positions);
+                        
+                        // 주기적 업데이트 시작
+                        if (!statusInterval) {
+                            statusInterval = setInterval(checkStatus, 2000);
+                        }
+                    } else {
+                        document.getElementById('start-btn').style.display = 'inline-block';
+                        document.getElementById('stop-btn').style.display = 'none';
+                        document.getElementById('stat-status').textContent = '중지됨';
+                        document.getElementById('stat-status').className = 'value status-stopped';
+                        
+                        // Control Panel 활성화 (중지 시 수정 가능)
+                        const controlPanel = document.getElementById('control-panel');
+                        if (controlPanel) {
+                            controlPanel.style.opacity = '1';
+                            controlPanel.style.pointerEvents = 'auto';
+                        }
+                        
+                        if (statusInterval) {
+                            clearInterval(statusInterval);
+                            statusInterval = null;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('상태 확인 실패:', error);
+            }
+        }
+
+        // Paper Trading 시작
+        // 사용 가능한 심볼/전략 로드
+        async function loadAvailableOptions() {
+            try {
+                // 심볼 목록
+                const symbolsRes = await fetch('/api/paper/available-symbols', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (symbolsRes.ok) {
+                    const symbolsData = await symbolsRes.json();
+                    const symbolSelect = document.getElementById('symbol-select');
+                    if (symbolSelect && symbolsData.symbols) {
+                        // 기존 옵션 유지 (전체 심볼)
+                        const firstOption = symbolSelect.querySelector('option[value=""]');
+                        symbolSelect.innerHTML = '';
+                        if (firstOption) {
+                            symbolSelect.appendChild(firstOption);
+                        }
+                        // 심볼 옵션 추가
+                        symbolsData.symbols.forEach(symbol => {
+                            const option = document.createElement('option');
+                            option.value = symbol;
+                            option.textContent = symbol;
+                            symbolSelect.appendChild(option);
+                        });
+                    }
+                }
+                
+                // 전략 목록
+                const strategiesRes = await fetch('/api/paper/available-strategies', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (strategiesRes.ok) {
+                    const strategiesData = await strategiesRes.json();
+                    const strategySelect = document.getElementById('strategy-select');
+                    if (strategySelect && strategiesData.strategies) {
+                        // 기존 옵션 유지 (전체 전략)
+                        const firstOption = strategySelect.querySelector('option[value=""]');
+                        strategySelect.innerHTML = '';
+                        if (firstOption) {
+                            strategySelect.appendChild(firstOption);
+                        }
+                        // 전략 옵션 추가
+                        strategiesData.strategies.forEach(strategy => {
+                            const option = document.createElement('option');
+                            option.value = strategy;
+                            option.textContent = strategy;
+                            strategySelect.appendChild(option);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('옵션 로드 실패:', error);
+            }
+        }
+
+        async function startPaperTrading() {
+            console.log('startPaperTrading 함수 호출됨');
+            
+            const initialCapitalInput = document.getElementById('initial-capital');
+            const requireApprovalInput = document.getElementById('require-approval');
+            const symbolSelect = document.getElementById('symbol-select');
+            const strategySelect = document.getElementById('strategy-select');
+            
+            if (!initialCapitalInput) {
+                console.error('initial-capital 요소를 찾을 수 없습니다');
+                alert('초기 자본 입력 필드를 찾을 수 없습니다');
+                return;
+            }
+            
+            const initialCapital = parseFloat(initialCapitalInput.value) || 10000;
+            const requireApproval = requireApprovalInput ? requireApprovalInput.checked : false;
+            const selectedSymbol = symbolSelect ? (symbolSelect.value || null) : null;
+            const selectedStrategy = strategySelect ? (strategySelect.value || null) : null;
+
+            console.log('요청 데이터:', { initialCapital, requireApproval, symbol: selectedSymbol, strategy: selectedStrategy });
+
+            try {
+                const response = await fetch('/api/paper/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        initial_capital: initialCapital,
+                        require_approval: requireApproval,
+                        symbol: selectedSymbol,
+                        strategy: selectedStrategy
+                    })
+                });
+
+                console.log('응답 상태:', response.status);
+
+                const result = await response.json();
+                console.log('응답 결과:', result);
+
+                if (response.ok && result.success) {
+                    alert('Paper Trading이 시작되었습니다');
+                    const controlPanel = document.getElementById('control-panel');
+                    if (controlPanel) {
+                        controlPanel.style.display = 'none';
+                    }
+                    checkStatus();
+                } else {
+                    alert(result.message || '시작 실패');
+                }
+            } catch (error) {
+                console.error('시작 실패:', error);
+                alert('시작 실패: ' + error.message);
+            }
+        }
+
+        // Paper Trading 중지
+        async function stopPaperTrading() {
+            if (!confirm('Paper Trading을 중지하시겠습니까?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/paper/stop', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert('Paper Trading이 중지되었습니다');
+                    document.getElementById('control-panel').style.display = 'flex';
+                    checkStatus();
+                } else {
+                    alert(result.message || '중지 실패');
+                }
+            } catch (error) {
+                console.error('중지 실패:', error);
+                alert('중지 실패: ' + error.message);
+            }
+        }
+
+        // 통계 업데이트
+        function updateStats(stats) {
+            if (!stats) return;
+
+            document.getElementById('stat-capital').textContent = '$' + stats.capital.toFixed(2);
+            document.getElementById('stat-total-pnl').textContent = 
+                (stats.total_pnl >= 0 ? '+' : '') + '$' + stats.total_pnl.toFixed(2);
+            document.getElementById('stat-total-pnl').className = 
+                'value ' + (stats.total_pnl >= 0 ? 'pnl-positive' : 'pnl-negative');
+            document.getElementById('stat-daily-pnl').textContent = 
+                (stats.daily_pnl >= 0 ? '+' : '') + '$' + stats.daily_pnl.toFixed(2);
+            document.getElementById('stat-daily-pnl').className = 
+                'value ' + (stats.daily_pnl >= 0 ? 'pnl-positive' : 'pnl-negative');
+            document.getElementById('stat-open-positions').textContent = stats.open_positions || 0;
+            document.getElementById('stat-winrate').textContent = stats.win_rate.toFixed(1) + '%';
+        }
+
+        // 포지션 렌더링
+        function renderPositions(positions) {
+            const tbody = document.getElementById('positions-tbody');
+            
+            // 오픈 포지션 목록 업데이트 (신호 처리 시 중복 체크용)
+            openPositions = positions || [];
+
+            if (!positions || positions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; padding: 40px; color: var(--text-muted);">오픈 포지션이 없습니다</td></tr>';
+                return;
+            }
+
+            // 기존 포지션 ID 목록
+            const existingPositionIds = new Set();
+            Array.from(tbody.querySelectorAll('tr')).forEach(row => {
+                const posId = row.getAttribute('data-position-id');
+                if (posId) {
+                    existingPositionIds.add(posId);
+                }
+            });
+
+            // 새로운 포지션 ID 목록
+            const newPositionIds = new Set(positions.map(pos => pos.position_id));
+
+            // 제거된 포지션 삭제
+            Array.from(tbody.querySelectorAll('tr')).forEach(row => {
+                const posId = row.getAttribute('data-position-id');
+                if (posId && !newPositionIds.has(posId)) {
+                    row.remove();
+                }
+            });
+
+            // 포지션 추가/업데이트
+            positions.forEach(pos => {
+                const rowId = `position-${pos.position_id}`;
+                let row = document.getElementById(rowId);
+                
+                // 실시간 가격 가져오기 (Binance WebSocket 우선)
+                const realtimePrice = symbolPrices[pos.symbol];
+                const currentPrice = realtimePrice || pos.current_price || pos.entry_price;
+                
+                // PnL 재계산 (실시간 가격 기준)
+                let pnl = 0;
+                let pnlPercent = 0;
+                if (currentPrice && pos.entry_price) {
+                    if (pos.side === 'buy') {
+                        pnl = (currentPrice - pos.entry_price) * pos.quantity;
+                        pnlPercent = ((currentPrice - pos.entry_price) / pos.entry_price) * 100;
+                    } else { // sell/short
+                        pnl = (pos.entry_price - currentPrice) * pos.quantity;
+                        pnlPercent = ((pos.entry_price - currentPrice) / pos.entry_price) * 100;
+                    }
+                } else {
+                    // 서버에서 계산된 PnL 사용
+                    pnl = pos.pnl || 0;
+                    pnlPercent = pos.pnl_percent || 0;
+                }
+
+                // SL/TP 목표 % 계산
+                let slPercent = null;
+                let tpPercent = null;
+                if (pos.entry_price) {
+                    if (pos.stop_loss) {
+                        if (pos.side === 'buy') {
+                            slPercent = ((pos.stop_loss - pos.entry_price) / pos.entry_price) * 100;
+                        } else { // sell/short
+                            slPercent = ((pos.entry_price - pos.stop_loss) / pos.entry_price) * 100;
+                        }
+                    }
+                    if (pos.take_profit) {
+                        if (pos.side === 'buy') {
+                            tpPercent = ((pos.take_profit - pos.entry_price) / pos.entry_price) * 100;
+                        } else { // sell/short
+                            tpPercent = ((pos.entry_price - pos.take_profit) / pos.entry_price) * 100;
+                        }
+                    }
+                }
+
+                const openedAt = pos.opened_at ? new Date(pos.opened_at).toLocaleString('ko-KR') : '-';
+
+                if (!row) {
+                    // 새 행 생성
+                    row = document.createElement('tr');
+                    row.id = rowId;
+                    row.setAttribute('data-position-id', pos.position_id);
+                    row.setAttribute('data-symbol', pos.symbol);
+                    tbody.appendChild(row);
+                }
+
+                // 행 내용 업데이트
+                row.innerHTML = `
+                    <td>${pos.position_id.substring(0, 12)}...</td>
+                    <td><strong>${pos.symbol}</strong></td>
+                    <td><span class="badge badge-${pos.side === 'buy' ? 'buy' : 'sell'}">${pos.side.toUpperCase()}</span></td>
+                    <td>$${pos.entry_price.toFixed(8)}</td>
+                    <td>${pos.quantity.toFixed(4)}</td>
+                    <td id="position-price-${pos.position_id}" class="${realtimePrice ? 'pnl-positive' : ''}">$${currentPrice.toFixed(8)}</td>
+                    <td id="position-pnl-${pos.position_id}" class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">
+                        ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}
+                    </td>
+                    <td id="position-pnl-percent-${pos.position_id}" class="${pnlPercent >= 0 ? 'pnl-positive' : 'pnl-negative'}">
+                        ${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%
+                    </td>
+                    <td>${pos.stop_loss ? '$' + pos.stop_loss.toFixed(8) : '-'}</td>
+                    <td id="position-sl-percent-${pos.position_id}" style="color: var(--red); font-weight: 600;">
+                        ${slPercent !== null ? (slPercent >= 0 ? '+' : '') + slPercent.toFixed(2) + '%' : '-'}
+                    </td>
+                    <td>${pos.take_profit ? '$' + pos.take_profit.toFixed(8) : '-'}</td>
+                    <td id="position-tp-percent-${pos.position_id}" style="color: var(--green); font-weight: 600;">
+                        ${tpPercent !== null ? (tpPercent >= 0 ? '+' : '') + tpPercent.toFixed(2) + '%' : '-'}
+                    </td>
+                    <td>${openedAt}</td>
+                    <td>
+                        <button class="btn btn-danger" onclick="closePaperPosition('${pos.position_id}', '${pos.symbol}')" style="padding: 4px 12px; font-size: 11px;">
+                            청산
+                        </button>
+                    </td>
+                `;
+
+                // 해당 심볼의 가격 WebSocket 연결 (아직 연결되지 않은 경우)
+                if (pos.symbol && !priceWebSockets[pos.symbol]) {
+                    connectPriceWebSocket(pos.symbol);
+                }
+            });
+        }
+
+        // 차트 초기화
+        function initChart() {
+            const ctx = document.getElementById('price-chart').getContext('2d');
+            // CSS 변수 가져오기
+            const rootStyles = getComputedStyle(document.documentElement);
+            const textSecondary = rootStyles.getPropertyValue('--text-secondary').trim();
+            const borderColor = rootStyles.getPropertyValue('--border-color').trim();
+            
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Price',
+                        data: [],
+                        borderColor: textSecondary,
+                        backgroundColor: 'transparent'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                color: textSecondary
+                            },
+                            grid: {
+                                color: borderColor
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: textSecondary
+                            },
+                            grid: {
+                                color: borderColor
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        // WebSocket 연결 (Paper Trading 상태)
+        function connectPaperTradingWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${window.location.host}/ws/paper-trading`);
+            
+            ws.onopen = () => {
+                console.log('Paper Trading WebSocket 연결 성공');
+                // 연결 후 ping 전송
+                const pingInterval = setInterval(() => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send('ping');
+                    } else {
+                        clearInterval(pingInterval);
+                    }
+                }, 30000); // 30초마다 ping
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    // "pong" 메시지는 JSON 파싱하지 않음
+                    if (event.data === 'pong') {
+                        return;
+                    }
+                    
+                    const data = JSON.parse(event.data);
+                    console.log('WebSocket 메시지 수신:', data);
+                    
+                    if (data.type === 'paper_trading_update') {
+                        // 실시간 통계 업데이트
+                        if (data.stats) {
+                            updateStats(data.stats);
+                        }
+                        // 실시간 포지션 업데이트
+                        if (data.open_positions) {
+                            openPositions = data.open_positions || [];  // 오픈 포지션 저장
+                            renderPositions(data.open_positions);
+                            renderSignals();  // 신호 테이블 상태 업데이트 (현재 유지중 표시)
+                        }
+                    }
+                } catch (error) {
+                    // JSON 파싱 실패는 무시 (pong 등 텍스트 메시지)
+                    if (event.data !== 'pong') {
+                        console.error('WebSocket 메시지 파싱 실패:', error, '데이터:', event.data);
+                    }
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('Paper Trading WebSocket 연결 끊김');
+                setTimeout(() => connectPaperTradingWebSocket(), 5000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('Paper Trading WebSocket 에러:', error);
+            };
+            
+            wsConnection = ws;
+        }
+
+        // WebSocket 연결 시작
+        connectPaperTradingWebSocket();
+        connectSignalsWebSocket();
+
+        // 신호 WebSocket 연결
+        function connectSignalsWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${window.location.host}/ws/signals`);
+            
+            ws.onopen = () => {
+                console.log('Signals WebSocket 연결 성공');
+                // 연결 후 ping 전송
+                const pingInterval = setInterval(() => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send('ping');
+                    } else {
+                        clearInterval(pingInterval);
+                    }
+                }, 30000); // 30초마다 ping
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    // "pong" 메시지는 JSON 파싱하지 않음
+                    if (event.data === 'pong') {
+                        return;
+                    }
+                    
+                    const data = JSON.parse(event.data);
+                    console.log('Signals WebSocket 메시지 수신:', data);
+                    
+                    if (data.type === 'signals_update' && data.signals) {
+                        // 신호 추가
+                        data.signals.forEach(signal => {
+                            // 중복 체크 (signal_id 또는 symbol+timeframe+signal_type+created_at)
+                            const signalKey = `${signal.symbol}_${signal.timeframe}_${signal.signal_type}_${signal.created_at}`;
+                            const exists = recentSignals.some(s => {
+                                const key = `${s.symbol}_${s.timeframe}_${s.signal_type}_${s.created_at}`;
+                                return key === signalKey;
+                            });
+                            
+                            if (!exists) {
+                                // 처리 중인 신호인지 확인
+                                const signalKey = `${signal.symbol}_${signal.timeframe}_${signal.signal_type}_${signal.created_at}`;
+                                if (!processingSignals.has(signalKey)) {
+                                    recentSignals.unshift(signal);
+                                    // 최대 50개까지만 유지
+                                    if (recentSignals.length > 50) {
+                                        recentSignals = recentSignals.slice(0, 50);
+                                    }
+                                    
+                                    // 자동 진입이 활성화되어 있으면 Paper Trading 엔진에 신호 전달
+                                    if (autoEntryEnabled) {
+                                        processSignalForPaperTrading(signal);
+                                    }
+                                }
+                            }
+                        });
+                        
+                        // UI 업데이트
+                        renderSignals();
+                    }
+                } catch (error) {
+                    // JSON 파싱 실패는 무시 (pong 등 텍스트 메시지)
+                    if (event.data !== 'pong') {
+                        console.error('Signals WebSocket 메시지 파싱 실패:', error, '데이터:', event.data);
+                    }
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('Signals WebSocket 연결 끊김');
+                setTimeout(() => connectSignalsWebSocket(), 5000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('Signals WebSocket 에러:', error);
+            };
+            
+            signalsWsConnection = ws;
+        }
+
+        // 신호 렌더링
+        function renderSignals() {
+            const tbody = document.getElementById('signals-tbody');
+            const countSpan = document.getElementById('signals-count');
+            
+            if (!tbody) return;
+            
+            // 카운트 업데이트
+            if (countSpan) {
+                countSpan.textContent = `${recentSignals.length}개`;
+            }
+            
+            tbody.innerHTML = '';
+            
+            if (recentSignals.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: var(--text-muted);">신호를 기다리는 중...</td></tr>';
+                return;
+            }
+            
+            recentSignals.forEach(signal => {
+                const row = document.createElement('tr');
+                const createdAt = signal.created_at ? new Date(signal.created_at).toLocaleString('ko-KR') : '-';
+                const signalType = signal.signal_type || '-';
+                const sideClass = signalType.toLowerCase() === 'buy' ? 'badge-buy' : 'badge-sell';
+                
+                // 현재 가격 가져오기
+                const symbol = signal.symbol || '';
+                const currentPrice = symbolPrices[symbol] || signal.entry_price || 0;
+                const priceChange = currentPrice && signal.entry_price ? 
+                    ((currentPrice - signal.entry_price) / signal.entry_price * 100) : 0;
+                const priceClass = priceChange >= 0 ? 'pnl-positive' : 'pnl-negative';
+                
+                // 신호 키 생성
+                const signalKey = `${symbol}_${signal.timeframe}_${signal.signal_type}_${signal.created_at}`;
+                
+                // 처리 중인 신호인지 확인
+                const isProcessing = processingSignals.has(signalKey);
+                
+                // 신호에 심볼이 있으면 가격 WebSocket 연결
+                if (symbol && !priceWebSockets[symbol]) {
+                    connectPriceWebSocket(symbol);
+                }
+                
+                row.id = `signal-row-${symbol}-${signal.created_at}`;
+                
+                // 상태 컬럼: 처리 중이거나 자동진입이 켜져있으면 상태 표시, 아니면 진입 버튼
+                let statusCell = '';
+                if (isProcessing) {
+                    statusCell = '<span style="color: var(--yellow);">처리 중...</span>';
+                } else if (autoEntryEnabled) {
+                    statusCell = '<span style="color: var(--green);">자동진입 활성</span>';
+                } else {
+                    // 수동 진입 버튼
+                    statusCell = `<button class="btn btn-primary" onclick="manualEntry('${signalKey}')" style="padding: 4px 12px; font-size: 11px;">진입</button>`;
+                }
+                
+                row.innerHTML = `
+                    <td style="font-size: 11px;">${createdAt}</td>
+                    <td><strong>${symbol || '-'}</strong></td>
+                    <td style="font-size: 11px; color: var(--text-secondary);">${signal.strategy || '-'}</td>
+                    <td><span class="badge ${sideClass}">${signalType.toUpperCase()}</span></td>
+                    <td>$${(signal.entry_price || 0).toFixed(2)}</td>
+                    <td id="price-${symbol}" class="${priceClass}">$${currentPrice.toFixed(2)}</td>
+                    <td>$${(signal.stop_loss || 0).toFixed(2)}</td>
+                    <td>$${(signal.take_profit_1 || 0).toFixed(2)}</td>
+                    <td>${((signal.confidence || 0) * 100).toFixed(1)}%</td>
+                    <td>${statusCell}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 가격 WebSocket 연결 (Binance)
+        function connectPriceWebSocket(symbol) {
+            if (priceWebSockets[symbol]) {
+                return; // 이미 연결됨
+            }
+            
+            // Binance WebSocket 연결
+            const stream = symbol.toLowerCase() + '@aggTrade';
+            const ws = new WebSocket(`wss://fstream.binance.com/ws/${stream}`);
+            
+            ws.onopen = () => {
+                console.log(`가격 WebSocket 연결: ${symbol}`);
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const price = parseFloat(data.p);
+                    
+                    // 가격 업데이트
+                    symbolPrices[symbol] = price;
+                    
+                    // 신호 테이블의 가격 업데이트
+                    const priceEl = document.getElementById(`price-${symbol}`);
+                    if (priceEl) {
+                        const entryPrice = recentSignals.find(s => s.symbol === symbol)?.entry_price || 0;
+                        const priceChange = entryPrice ? ((price - entryPrice) / entryPrice * 100) : 0;
+                        priceEl.textContent = '$' + price.toFixed(2);
+                        priceEl.className = priceChange >= 0 ? 'pnl-positive' : 'pnl-negative';
+                    }
+                    
+                    // 포지션 테이블의 가격 및 PnL 업데이트
+                    const positionRows = document.querySelectorAll(`tr[data-symbol="${symbol}"]`);
+                    positionRows.forEach(row => {
+                        const positionId = row.getAttribute('data-position-id');
+                        if (!positionId) return;
+                        
+                        // 포지션 정보 가져오기
+                        const entryPriceCell = row.querySelector('td:nth-child(4)');
+                        const quantityCell = row.querySelector('td:nth-child(5)');
+                        const sideBadge = row.querySelector('.badge');
+                        
+                        if (!entryPriceCell || !quantityCell || !sideBadge) return;
+                        
+                        const entryPrice = parseFloat(entryPriceCell.textContent.replace('$', ''));
+                        const quantity = parseFloat(quantityCell.textContent);
+                        const side = sideBadge.textContent.toLowerCase();
+                        
+                        // PnL 계산
+                        let pnl = 0;
+                        let pnlPercent = 0;
+                        if (side === 'buy') {
+                            pnl = (price - entryPrice) * quantity;
+                            pnlPercent = ((price - entryPrice) / entryPrice) * 100;
+                        } else { // sell/short
+                            pnl = (entryPrice - price) * quantity;
+                            pnlPercent = ((entryPrice - price) / entryPrice) * 100;
+                        }
+                        
+                        // 가격 셀 업데이트
+                        const priceCell = document.getElementById(`position-price-${positionId}`);
+                        if (priceCell) {
+                            priceCell.textContent = '$' + price.toFixed(8);
+                            priceCell.className = 'pnl-positive'; // 실시간 업데이트 표시
+                        }
+                        
+                        // PnL 셀 업데이트
+                        const pnlCell = document.getElementById(`position-pnl-${positionId}`);
+                        if (pnlCell) {
+                            pnlCell.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+                            pnlCell.className = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+                        }
+                        
+                        // PnL % 셀 업데이트
+                        const pnlPercentCell = document.getElementById(`position-pnl-percent-${positionId}`);
+                        if (pnlPercentCell) {
+                            pnlPercentCell.textContent = (pnlPercent >= 0 ? '+' : '') + pnlPercent.toFixed(2) + '%';
+                            pnlPercentCell.className = pnlPercent >= 0 ? 'pnl-positive' : 'pnl-negative';
+                        }
+                    });
+                    
+                    // Paper Trading 엔진에 가격 업데이트 (API 호출)
+                    updatePriceForPaperTrading(symbol, price);
+                } catch (error) {
+                    console.error(`가격 파싱 실패 (${symbol}):`, error);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error(`가격 WebSocket 에러 (${symbol}):`, error);
+            };
+            
+            ws.onclose = () => {
+                console.log(`가격 WebSocket 연결 끊김: ${symbol}`);
+                delete priceWebSockets[symbol];
+                // 재연결 시도
+                setTimeout(() => connectPriceWebSocket(symbol), 3000);
+            };
+            
+            priceWebSockets[symbol] = ws;
+        }
+
+        // 자동 진입 설정 업데이트
+        async function updateAutoEntrySetting(enabled) {
+            try {
+                // Paper Trading 엔진의 require_approval를 반대로 설정
+                // enabled가 true면 require_approval는 false (자동 진입)
+                const response = await fetch('/api/paper/set-auto-entry', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        auto_entry: enabled
+                    })
+                });
+                
+                if (response.ok) {
+                    console.log(`자동 진입 ${enabled ? '활성화' : '비활성화'}`);
+                    renderSignals(); // 상태 표시 업데이트
+                }
+            } catch (error) {
+                console.error('자동 진입 설정 실패:', error);
+            }
+        }
+
+        // Paper Trading을 위한 신호 처리 (자동)
+        async function processSignalForPaperTrading(signal) {
+            // 신호 키 생성 (중복 체크용)
+            const signalKey = `${signal.symbol}_${signal.timeframe}_${signal.signal_type}_${signal.created_at}`;
+            
+            // 이미 처리 중이거나 처리된 신호는 무시
+            if (processingSignals.has(signalKey)) {
+                console.log(`⏭️ 신호 이미 처리 중: ${signalKey}`);
+                return;
+            }
+            
+            // 해당 심볼에 이미 오픈 포지션이 있으면 무시
+            const symbol = signal.symbol || '';
+            const hasOpenPosition = openPositions.some(pos => pos.symbol === symbol && pos.status === 'OPEN');
+            if (hasOpenPosition) {
+                console.log(`⏭️ 포지션 유지 중인 심볼 신호 무시: ${symbol}`);
+                return;
+            }
+            
+            // 처리 중 표시
+            processingSignals.add(signalKey);
+            
+            try {
+                // 신호 ID 생성
+                const signalId = `${signal.symbol}_${signal.timeframe}_${signal.signal_type}_${signal.created_at ? new Date(signal.created_at).toISOString().replace(/[:.]/g, '') : Date.now()}`;
+                
+                const response = await fetch('/api/paper/process-signal', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        signal_id: signalId,
+                        signal: signal,
+                        is_manual: false  // 자동 진입
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    console.log(`✅ 신호 처리 완료: ${signalId}`);
+                    
+                    // 처리된 신호를 recentSignals에서 제거
+                    const index = recentSignals.findIndex(s => {
+                        const key = `${s.symbol}_${s.timeframe}_${s.signal_type}_${s.created_at}`;
+                        return key === signalKey;
+                    });
+                    if (index !== -1) {
+                        recentSignals.splice(index, 1);
+                        renderSignals();  // UI 업데이트
+                    }
+                } else {
+                    console.warn(`⚠️ 신호 처리 실패: ${result.result?.reason || 'unknown'}`);
+                    // 실패 시 처리 중 표시 제거 (재시도 가능하도록)
+                    processingSignals.delete(signalKey);
+                }
+            } catch (error) {
+                console.error('신호 처리 실패:', error);
+                // 에러 시 처리 중 표시 제거
+                processingSignals.delete(signalKey);
+            }
+        }
+
+        // Paper Trading 엔진에 가격 업데이트
+        async function updatePriceForPaperTrading(symbol, price) {
+            try {
+                const response = await fetch('/api/paper/update-price', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        symbol: symbol,
+                        price: price
+                    })
+                });
+                
+                if (!response.ok) {
+                    console.warn(`가격 업데이트 실패 (${symbol}):`, response.status);
+                }
+            } catch (error) {
+                console.error(`가격 업데이트 에러 (${symbol}):`, error);
+            }
+        }
+
+        // 수동 청산 버튼 클릭
+        async function closePaperPosition(positionId, symbol) {
+            if (!confirm(`${symbol} 포지션을 청산하시겠습니까?`)) {
+                return;
+            }
+
+            try {
+                // 현재 가격 가져오기
+                const currentPrice = symbolPrices[symbol];
+                
+                const response = await fetch('/api/paper/close-position', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        position_id: positionId,
+                        exit_price: currentPrice || null  // 현재 가격이 있으면 사용, 없으면 서버에서 결정
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    alert(`포지션이 청산되었습니다.\n청산가: $${result.exit_price.toFixed(8)}`);
+                    // 상태 다시 확인 (포지션 목록 업데이트)
+                    checkStatus();
+                } else {
+                    alert(`청산 실패: ${result.detail || result.message || 'unknown'}`);
+                }
+            } catch (error) {
+                console.error('청산 실패:', error);
+                alert('청산 실패: ' + error.message);
+            }
+        }
+
+        // 수동 진입 버튼 클릭
+        async function manualEntry(signalKey) {
+            // 이미 처리 중인 신호는 무시
+            if (processingSignals.has(signalKey)) {
+                alert('이미 처리 중인 신호입니다');
+                return;
+            }
+            
+            // signalKey에서 신호 찾기
+            const signal = recentSignals.find(s => {
+                const key = `${s.symbol}_${s.timeframe}_${s.signal_type}_${s.created_at}`;
+                return key === signalKey;
+            });
+            
+            if (!signal) {
+                alert('신호를 찾을 수 없습니다');
+                return;
+            }
+            
+            // 현재 가격 가져오기
+            const symbol = signal.symbol || '';
+            
+            // 해당 심볼에 이미 오픈 포지션이 있으면 무시
+            const hasOpenPosition = openPositions.some(pos => pos.symbol === symbol && pos.status === 'OPEN');
+            if (hasOpenPosition) {
+                alert(`${symbol}는 이미 포지션이 유지 중입니다.`);
+                return;
+            }
+            
+            const currentPrice = symbolPrices[symbol] || signal.entry_price || 0;
+            
+            if (!currentPrice) {
+                alert('현재 가격을 가져올 수 없습니다');
+                return;
+            }
+            
+            if (!confirm(`${symbol} ${signal.signal_type.toUpperCase()} 진입하시겠습니까?\n진입가: $${currentPrice.toFixed(8)}`)) {
+                return;
+            }
+            
+            // 처리 중 표시
+            processingSignals.add(signalKey);
+            
+            try {
+                // 신호 ID 생성
+                const signalId = `${signal.symbol}_${signal.timeframe}_${signal.signal_type}_${signal.created_at ? new Date(signal.created_at).toISOString().replace(/[:.]/g, '') : Date.now()}`;
+                
+                const response = await fetch('/api/paper/process-signal', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        signal_id: signalId,
+                        signal: {
+                            ...signal,
+                            entry_price: currentPrice  // 현재 가격으로 진입
+                        },
+                        is_manual: true,  // 수동 진입
+                        manual_entry_price: currentPrice  // 수동 진입 가격
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // 처리된 신호를 recentSignals에서 제거
+                    const index = recentSignals.findIndex(s => {
+                        const key = `${s.symbol}_${s.timeframe}_${s.signal_type}_${s.created_at}`;
+                        return key === signalKey;
+                    });
+                    if (index !== -1) {
+                        recentSignals.splice(index, 1);
+                    }
+                    
+                    renderSignals(); // UI 업데이트
+                    checkStatus(); // 포지션 상태 업데이트
+                } else {
+                    alert(`진입 실패: ${result.result?.reason || result.detail || 'unknown'}`);
+                    // 실패 시 처리 중 표시 제거
+                    processingSignals.delete(signalKey);
+                }
+            } catch (error) {
+                console.error('수동 진입 실패:', error);
+                alert('진입 실패: ' + error.message);
+                // 에러 시 처리 중 표시 제거
+                processingSignals.delete(signalKey);
+            }
+        }
+    </script>
+</body>
+</html>

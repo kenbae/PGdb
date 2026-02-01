@@ -1,0 +1,166 @@
+//@version=5
+// ============================================
+// BB (3σ) + Adaptive RSI Strategy
+// 볼린저 밴드 극단 + 적응형 RSI 확인
+// ============================================
+strategy("BB 3σ + Adaptive RSI Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10)
+
+// ============================================
+// 입력 파라미터
+// ============================================
+// Bollinger Band 설정
+bbLength = input.int(20, "BB Length", minval=5)
+bbStdDev = input.float(3.0, "BB StdDev (σ)", minval=1.0, maxval=5.0, step=0.5)
+bbSrc = input.source(close, "BB Source")
+
+// Adaptive RSI 설정
+erLength = input.int(10, "ER Length", minval=2)
+fastRsiLen = input.int(2, "Fast RSI Length", minval=2)
+slowRsiLen = input.int(30, "Slow RSI Length", minval=5)
+rsiSmooth = input.int(3, "RSI Smoothing", minval=1)
+rsiOverbought = input.int(70, "RSI Overbought")
+rsiOversold = input.int(30, "RSI Oversold")
+
+// 전략 설정
+useAdaptiveRsiFilter = input.bool(true, "Use Adaptive RSI Filter")
+slPercent = input.float(2.0, "Stop Loss %", minval=0.5, step=0.5)
+tp1Percent = input.float(3.0, "Take Profit 1 %", minval=0.5, step=0.5)
+tp2Percent = input.float(5.0, "Take Profit 2 %", minval=1.0, step=0.5)
+useTrailingStop = input.bool(true, "Use Trailing Stop")
+trailPercent = input.float(1.0, "Trailing Stop %", minval=0.1, step=0.1)
+
+// ============================================
+// Bollinger Band 계산 (3σ)
+// ============================================
+bbBasis = ta.sma(bbSrc, bbLength)
+bbDev = bbStdDev * ta.stdev(bbSrc, bbLength)
+bbUpper = bbBasis + bbDev
+bbLower = bbBasis - bbDev
+
+// BB 위치 (0-100 스케일)
+bbPercent = (close - bbLower) / (bbUpper - bbLower) * 100
+
+// ============================================
+// Adaptive RSI 계산
+// ============================================
+// Kaufman Efficiency Ratio
+change_abs = math.abs(close - close[erLength])
+volatility = math.sum(math.abs(close - close[1]), erLength)
+er = volatility != 0 ? change_abs / volatility : 0
+
+// RSI 계산 함수
+rsi_calc(src, len) =>
+    up = ta.rma(math.max(ta.change(src), 0), len)
+    down = ta.rma(-math.min(ta.change(src), 0), len)
+    down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
+
+// Fast/Slow RSI
+fastRsi = rsi_calc(close, fastRsiLen)
+slowRsi = rsi_calc(close, slowRsiLen)
+
+// Adaptive RSI (ER 가중 평균)
+adaptiveRsi = er * fastRsi + (1 - er) * slowRsi
+smoothedRsi = ta.ema(adaptiveRsi, rsiSmooth)
+rsiSignal = ta.ema(smoothedRsi, 9)
+
+// RSI 상태
+rsiOversoldCond = smoothedRsi < rsiOversold
+rsiOverboughtCond = smoothedRsi > rsiOverbought
+rsiBullishCross = ta.crossover(smoothedRsi, rsiSignal)
+rsiBearishCross = ta.crossunder(smoothedRsi, rsiSignal)
+
+// ============================================
+// 진입 조건
+// ============================================
+// 롱 조건: BB 하단 돌파 + RSI 과매도 (또는 RSI 필터 비활성화)
+longBBCond = close <= bbLower
+longRsiCond = useAdaptiveRsiFilter ? (rsiOversoldCond or rsiBullishCross) : true
+longCondition = longBBCond and longRsiCond
+
+// 숏 조건: BB 상단 돌파 + RSI 과매수 (또는 RSI 필터 비활성화)
+shortBBCond = close >= bbUpper
+shortRsiCond = useAdaptiveRsiFilter ? (rsiOverboughtCond or rsiBearishCross) : true
+shortCondition = shortBBCond and shortRsiCond
+
+// ============================================
+// 전략 실행
+// ============================================
+if longCondition and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+
+if shortCondition and strategy.position_size == 0
+    strategy.entry("Short", strategy.short)
+
+// SL/TP 계산
+longSL = strategy.position_avg_price * (1 - slPercent / 100)
+longTP1 = strategy.position_avg_price * (1 + tp1Percent / 100)
+longTP2 = strategy.position_avg_price * (1 + tp2Percent / 100)
+
+shortSL = strategy.position_avg_price * (1 + slPercent / 100)
+shortTP1 = strategy.position_avg_price * (1 - tp1Percent / 100)
+shortTP2 = strategy.position_avg_price * (1 - tp2Percent / 100)
+
+// 롱 포지션 청산
+if strategy.position_size > 0
+    if useTrailingStop
+        strategy.exit("Long Exit", "Long", stop=longSL, trail_price=longTP1, trail_offset=close * trailPercent / 100 / syminfo.mintick)
+    else
+        strategy.exit("Long TP1", "Long", qty_percent=50, limit=longTP1, stop=longSL)
+        strategy.exit("Long TP2", "Long", limit=longTP2, stop=longSL)
+
+// 숏 포지션 청산
+if strategy.position_size < 0
+    if useTrailingStop
+        strategy.exit("Short Exit", "Short", stop=shortSL, trail_price=shortTP1, trail_offset=close * trailPercent / 100 / syminfo.mintick)
+    else
+        strategy.exit("Short TP1", "Short", qty_percent=50, limit=shortTP1, stop=shortSL)
+        strategy.exit("Short TP2", "Short", limit=shortTP2, stop=shortSL)
+
+// ============================================
+// 시각화
+// ============================================
+// Bollinger Band
+plot(bbBasis, "BB Basis", color=color.orange, linewidth=1)
+p1 = plot(bbUpper, "BB Upper", color=color.red, linewidth=2)
+p2 = plot(bbLower, "BB Lower", color=color.green, linewidth=2)
+fill(p1, p2, color=color.new(color.gray, 90), title="BB Fill")
+
+// 진입 신호 표시
+plotshape(longCondition and strategy.position_size == 0, "Long Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(shortCondition and strategy.position_size == 0, "Short Signal", shape.triangledown, location.abovebar, color.red, size=size.small)
+
+// 배경색 (BB 극단 영역)
+bgcolor(close <= bbLower ? color.new(color.green, 90) : close >= bbUpper ? color.new(color.red, 90) : na)
+
+// ============================================
+// 정보 테이블
+// ============================================
+var table infoTable = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 80))
+if barstate.islast
+    table.cell(infoTable, 0, 0, "BB %", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 0, str.tostring(bbPercent, "#.#") + "%", text_color=bbPercent < 0 ? color.green : bbPercent > 100 ? color.red : color.gray, text_size=size.small)
+
+    table.cell(infoTable, 0, 1, "Adaptive RSI", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 1, str.tostring(smoothedRsi, "#.#"), text_color=smoothedRsi > rsiOverbought ? color.red : smoothedRsi < rsiOversold ? color.green : color.gray, text_size=size.small)
+
+    table.cell(infoTable, 0, 2, "ER", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 2, str.tostring(er, "#.##"), text_color=er > 0.5 ? color.green : color.orange, text_size=size.small)
+
+    table.cell(infoTable, 0, 3, "Signal", text_color=color.white, text_size=size.small)
+    signalText = longCondition ? "LONG" : shortCondition ? "SHORT" : "-"
+    signalColor = longCondition ? color.green : shortCondition ? color.red : color.gray
+    table.cell(infoTable, 1, 3, signalText, text_color=signalColor, text_size=size.small)
+
+    table.cell(infoTable, 0, 4, "Position", text_color=color.white, text_size=size.small)
+    posText = strategy.position_size > 0 ? "LONG" : strategy.position_size < 0 ? "SHORT" : "FLAT"
+    posColor = strategy.position_size > 0 ? color.green : strategy.position_size < 0 ? color.red : color.gray
+    table.cell(infoTable, 1, 4, posText, text_color=posColor, text_size=size.small)
+
+    table.cell(infoTable, 0, 5, "P&L %", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 5, str.tostring(strategy.netprofit / strategy.initial_capital * 100, "#.##") + "%", text_color=strategy.netprofit > 0 ? color.green : color.red, text_size=size.small)
+
+// ============================================
+// 알림
+// ============================================
+alertcondition(longCondition, "Long Signal", "BB 3σ + Adaptive RSI: LONG 신호")
+alertcondition(shortCondition, "Short Signal", "BB 3σ + Adaptive RSI: SHORT 신호")

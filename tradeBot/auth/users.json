@@ -1,0 +1,11 @@
+{
+  "admin": {
+    "password_hash": "0VnmlhQJw2y7R5zdVvTm0M1qeevI17bFUc0z6/xSDww=",
+    "salt": "c63a524a3a778e23a082cfa457c7083c",
+    "role": "admin",
+    "created_at": "2026-01-23T16:34:41.299800",
+    "last_login": "2026-02-01T08:52:02.724087",
+    "failed_attempts": 0,
+    "locked_until": null
+  }
+}

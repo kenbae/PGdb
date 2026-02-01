@@ -1,0 +1,85 @@
+//@version=5
+// ============================================
+// Dual RSI with Dynamic Bands
+// Fast/Slow RSI + 표준편차 밴드
+// ============================================
+indicator("Dual RSI with Bands", overlay=false)
+
+// 입력 파라미터
+fastLen = input.int(7, "Fast RSI Length", minval=2)
+slowLen = input.int(14, "Slow RSI Length", minval=2)
+bandLen = input.int(20, "Band Length")
+bandMult = input.float(1.5, "Band Multiplier", step=0.1)
+overbought = input.int(70, "Overbought Level")
+oversold = input.int(30, "Oversold Level")
+showSignals = input.bool(true, "Show Cross Signals")
+
+// RSI 계산
+fastRSI = ta.rsi(close, fastLen)
+slowRSI = ta.rsi(close, slowLen)
+
+// 평균 RSI (밴드 기준)
+avgRSI = (fastRSI + slowRSI) / 2
+
+// 동적 밴드 계산
+basis = ta.sma(avgRSI, bandLen)
+dev = ta.stdev(avgRSI, bandLen)
+upperBand = basis + dev * bandMult
+lowerBand = basis - dev * bandMult
+
+// 밴드 클램핑 (0-100 범위)
+upperBand := math.min(upperBand, 95)
+lowerBand := math.max(lowerBand, 5)
+
+// 색상 정의
+fastColor = fastRSI > slowRSI ? color.red : color.maroon
+slowColor = color.blue
+
+// RSI 플롯
+plot(fastRSI, "Fast RSI", color=fastColor, linewidth=2)
+plot(slowRSI, "Slow RSI", color=slowColor, linewidth=2)
+
+// 밴드 영역
+p1 = plot(upperBand, "Upper Band", color=color.new(color.orange, 60))
+p2 = plot(lowerBand, "Lower Band", color=color.new(color.orange, 60))
+fill(p1, p2, color=color.new(color.yellow, 85), title="Band Fill")
+
+// 기준선
+hline(overbought, "Overbought", color=color.gray, linestyle=hline.style_dashed)
+hline(oversold, "Oversold", color=color.gray, linestyle=hline.style_dashed)
+hline(50, "Middle", color=color.gray, linestyle=hline.style_dotted)
+
+// 크로스 신호
+bullCross = ta.crossover(fastRSI, slowRSI) and avgRSI < 40
+bearCross = ta.crossunder(fastRSI, slowRSI) and avgRSI > 60
+
+// 강한 신호 (밴드 터치 + 크로스)
+strongBull = bullCross and avgRSI < lowerBand
+strongBear = bearCross and avgRSI > upperBand
+
+// 신호 플롯
+plotshape(showSignals and bullCross and not strongBull, "Buy Signal", shape.triangleup, location.bottom, color.green, size=size.small)
+plotshape(showSignals and bearCross and not strongBear, "Sell Signal", shape.triangledown, location.top, color.red, size=size.small)
+plotshape(showSignals and strongBull, "Strong Buy", shape.triangleup, location.bottom, color.lime, size=size.normal)
+plotshape(showSignals and strongBear, "Strong Sell", shape.triangledown, location.top, color.fuchsia, size=size.normal)
+
+// 배경색
+bgcolor(avgRSI > overbought ? color.new(color.red, 92) : avgRSI < oversold ? color.new(color.green, 92) : na)
+
+// 알림
+alertcondition(bullCross, "Bullish Cross", "Dual RSI 매수 크로스")
+alertcondition(bearCross, "Bearish Cross", "Dual RSI 매도 크로스")
+alertcondition(strongBull, "Strong Bullish", "Dual RSI 강한 매수 신호")
+alertcondition(strongBear, "Strong Bearish", "Dual RSI 강한 매도 신호")
+
+// 정보 테이블
+var table infoTable = table.new(position.top_right, 2, 4, bgcolor=color.new(color.black, 80))
+if barstate.islast
+    table.cell(infoTable, 0, 0, "Fast RSI", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 0, str.tostring(fastRSI, "#.#"), text_color=fastColor, text_size=size.small)
+    table.cell(infoTable, 0, 1, "Slow RSI", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 1, str.tostring(slowRSI, "#.#"), text_color=slowColor, text_size=size.small)
+    table.cell(infoTable, 0, 2, "Diff", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 2, str.tostring(fastRSI - slowRSI, "#.#"), text_color=fastRSI > slowRSI ? color.green : color.red, text_size=size.small)
+    table.cell(infoTable, 0, 3, "Zone", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 3, avgRSI > overbought ? "OB" : avgRSI < oversold ? "OS" : "N", text_color=avgRSI > overbought ? color.red : avgRSI < oversold ? color.green : color.gray, text_size=size.small)

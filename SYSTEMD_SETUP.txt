@@ -1,0 +1,196 @@
+# ============================================================
+# systemd timer 설정 (cron보다 강력한 대안)
+# ============================================================
+
+# ============================================================
+# 1. Service 파일 생성
+# ============================================================
+# 파일: /etc/systemd/system/crypto-pipeline.service
+
+[Unit]
+Description=Crypto Trading Pipeline
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/crypto-trading
+Environment="PYTHONPATH=/home/ubuntu/crypto-trading"
+ExecStart=/usr/bin/python3 /home/ubuntu/crypto-trading/run_pipeline.py
+StandardOutput=append:/home/ubuntu/crypto-trading/logs/pipeline.log
+StandardError=append:/home/ubuntu/crypto-trading/logs/pipeline.log
+
+# 재시작 정책
+Restart=on-failure
+RestartSec=5min
+
+[Install]
+WantedBy=multi-user.target
+
+
+# ============================================================
+# 2. Timer 파일 생성 (30분마다 실행)
+# ============================================================
+# 파일: /etc/systemd/system/crypto-pipeline.timer
+
+[Unit]
+Description=Run Crypto Trading Pipeline every 30 minutes
+Requires=crypto-pipeline.service
+
+[Timer]
+# 매 시간 1분과 31분에 실행
+OnCalendar=*:01,31:00
+# 시스템 부팅 후 2분 뒤에도 실행
+OnBootSec=2min
+# 정확한 시간에 실행 (지연 최소화)
+AccuracySec=1s
+# 놓친 실행을 바로 실행
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
+
+# ============================================================
+# 3. 설치 및 활성화
+# ============================================================
+
+# Service와 Timer 파일을 생성한 후:
+
+# 1. 권한 설정
+sudo chmod 644 /etc/systemd/system/crypto-pipeline.service
+sudo chmod 644 /etc/systemd/system/crypto-pipeline.timer
+
+# 2. systemd 재로드
+sudo systemctl daemon-reload
+
+# 3. Timer 활성화 및 시작
+sudo systemctl enable crypto-pipeline.timer
+sudo systemctl start crypto-pipeline.timer
+
+# 4. 상태 확인
+sudo systemctl status crypto-pipeline.timer
+sudo systemctl status crypto-pipeline.service
+
+# 5. 다음 실행 시간 확인
+sudo systemctl list-timers crypto-pipeline.timer
+
+
+# ============================================================
+# 4. 관리 명령어
+# ============================================================
+
+# Timer 상태 확인
+sudo systemctl status crypto-pipeline.timer
+
+# 로그 확인
+sudo journalctl -u crypto-pipeline.service -f
+
+# 로그 확인 (최근 50줄)
+sudo journalctl -u crypto-pipeline.service -n 50
+
+# 수동 실행 (테스트용)
+sudo systemctl start crypto-pipeline.service
+
+# Timer 중지
+sudo systemctl stop crypto-pipeline.timer
+
+# Timer 비활성화
+sudo systemctl disable crypto-pipeline.timer
+
+# Timer 재시작
+sudo systemctl restart crypto-pipeline.timer
+
+
+# ============================================================
+# 5. 장점
+# ============================================================
+# ✓ 로깅이 자동으로 systemd journal에 기록
+# ✓ 실행 실패 시 자동 재시도 가능
+# ✓ 의존성 관리 (PostgreSQL이 시작된 후에만 실행)
+# ✓ 시스템 부팅 시 자동 시작
+# ✓ 실행 이력 추적 용이
+# ✓ 리소스 제한 설정 가능
+
+
+# ============================================================
+# 6. 다양한 스케줄 예시
+# ============================================================
+
+# 매 30분마다 (0분, 30분)
+OnCalendar=*:0,30:00
+
+# 매 시간 1분과 31분
+OnCalendar=*:01,31:00
+
+# 매 시간
+OnCalendar=hourly
+
+# 매일 자정
+OnCalendar=daily
+
+# 평일 9시-17시 매 시간
+OnCalendar=Mon-Fri 09..17:00:00
+
+# 매 15분마다
+OnCalendar=*:0/15:00
+
+
+# ============================================================
+# 7. 고급 설정 (선택사항)
+# ============================================================
+
+# Service 파일에 추가 가능한 옵션들:
+
+[Service]
+# CPU 사용률 제한 (50%)
+CPUQuota=50%
+
+# 메모리 제한 (1GB)
+MemoryLimit=1G
+
+# 실행 타임아웃 (10분)
+TimeoutSec=600
+
+# 실행 전 대기 시간 (랜덤)
+RandomizedDelaySec=30s
+
+# 환경 변수 파일 사용
+EnvironmentFile=/home/ubuntu/crypto-trading/.env
+
+
+# ============================================================
+# 8. 모니터링
+# ============================================================
+
+# 실시간 로그 모니터링
+sudo journalctl -u crypto-pipeline.service -f
+
+# 특정 날짜의 로그
+sudo journalctl -u crypto-pipeline.service --since "2026-01-17 00:00:00"
+
+# 실행 통계
+sudo systemctl show crypto-pipeline.timer
+
+
+# ============================================================
+# 9. 트러블슈팅
+# ============================================================
+
+# Timer가 실행되지 않는 경우:
+# 1. Timer 상태 확인
+sudo systemctl status crypto-pipeline.timer
+
+# 2. Service 상태 확인
+sudo systemctl status crypto-pipeline.service
+
+# 3. 로그 확인
+sudo journalctl -u crypto-pipeline.service --since "1 hour ago"
+
+# 4. 수동 실행 테스트
+sudo systemctl start crypto-pipeline.service
+
+# 5. 설정 파일 검증
+sudo systemd-analyze verify /etc/systemd/system/crypto-pipeline.service
+sudo systemd-analyze verify /etc/systemd/system/crypto-pipeline.timer

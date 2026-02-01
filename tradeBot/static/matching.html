@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signal-Action Matching - Trading Bot</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0b0e11;
+            --bg-secondary: #1e2329;
+            --bg-tertiary: #2b3139;
+            --text-primary: #eaecef;
+            --text-secondary: #848e9c;
+            --text-muted: #5e6673;
+            --border-color: #2b3139;
+            --green: #0ecb81;
+            --green-bg: rgba(14, 203, 129, 0.1);
+            --red: #f6465d;
+            --red-bg: rgba(246, 70, 93, 0.1);
+            --yellow: #f0b90b;
+            --blue: #1e80ff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 13px;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--yellow);
+            margin-right: 30px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 20px;
+        }
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            padding: 8px 0;
+            transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active {
+            color: var(--text-primary);
+        }
+        .header-right {
+            margin-left: auto;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            align-items: flex-end;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .filter-group label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .filter-group select,
+        .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 13px;
+            min-width: 140px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: var(--border-color);
+        }
+        .btn-primary {
+            background: var(--green);
+            border-color: var(--green);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0db870;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            border-left: 3px solid var(--border-color);
+        }
+        .stat-card.success { border-left-color: var(--green); }
+        .stat-card.info { border-left-color: var(--blue); }
+        .stat-card .label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        .stat-card .value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* Table */
+        .table-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead {
+            background: var(--bg-tertiary);
+        }
+        th {
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+        tbody tr:hover {
+            background: var(--bg-tertiary);
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-matched {
+            background: var(--green-bg);
+            color: var(--green);
+        }
+        .badge-unmatched {
+            background: rgba(132, 142, 156, 0.1);
+            color: var(--text-secondary);
+        }
+        .badge-buy {
+            background: var(--green-bg);
+            color: var(--green);
+        }
+        .badge-sell {
+            background: var(--red-bg);
+            color: var(--red);
+        }
+        .pnl-positive {
+            color: var(--green);
+        }
+        .pnl-negative {
+            color: var(--red);
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 0;
+            max-width: 700px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .modal-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+        .modal-body {
+            padding: 16px 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">TradeBot</div>
+        <nav class="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="/signals">Signals</a>
+            <a href="/positions">Positions</a>
+            <a href="/matching" class="active">Matching</a>
+            <a href="/paper-trading">Paper Trading</a>
+        </nav>
+        <div class="header-right">
+            <button class="btn" onclick="checkTrainableSymbols()" id="check-symbols-btn">🔍 학습 가능 심볼 찾기</button>
+            <button class="btn" onclick="trainTimingModel()" id="train-timing-btn">타이밍 모델 학습</button>
+            <button class="btn" onclick="trainPolicyModel()" id="train-policy-btn">정책 모델 학습</button>
+            <button class="btn" onclick="showPolicySummary()" id="policy-summary-btn">정책 요약</button>
+            <button class="btn btn-primary" onclick="loadDataset()">데이터셋 새로고침</button>
+            <button class="btn" onclick="downloadDataset()">CSV 다운로드</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <label>Symbol</label>
+                <select id="filter-symbol">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Start Date</label>
+                <input type="date" id="filter-start-date">
+            </div>
+            <div class="filter-group">
+                <label>End Date</label>
+                <input type="date" id="filter-end-date">
+            </div>
+            <div class="filter-group">
+                <label>Time Window (분)</label>
+                <input type="number" id="filter-time-window" value="60" min="1" max="1440">
+            </div>
+            <div class="filter-group">
+                <label>Match Status</label>
+                <select id="filter-match-status">
+                    <option value="">All</option>
+                    <option value="matched">매칭됨만</option>
+                    <option value="unmatched">미매칭만</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Training Status</label>
+                <select id="filter-training-status">
+                    <option value="">All</option>
+                    <option value="timing">타이밍 학습 완료</option>
+                    <option value="policy">정책 학습 완료</option>
+                    <option value="both">둘 다 완료</option>
+                    <option value="none">학습 안됨</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <button class="btn btn-primary" onclick="applyFilters()">적용</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid" id="stats">
+            <div class="stat-card">
+                <div class="label">Total Signals</div>
+                <div class="value" id="stat-total-signals">-</div>
+            </div>
+            <div class="stat-card success">
+                <div class="label">Matched</div>
+                <div class="value" id="stat-matched">-</div>
+            </div>
+            <div class="stat-card info">
+                <div class="label">Match Rate</div>
+                <div class="value" id="stat-match-rate">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Dataset Size</div>
+                <div class="value" id="stat-dataset-size">-</div>
+            </div>
+            <div class="stat-card success">
+                <div class="label">Avg PnL</div>
+                <div class="value" id="stat-avg-pnl">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Win Rate</div>
+                <div class="value" id="stat-winrate">-</div>
+            </div>
+        </div>
+
+        <!-- 타이밍 모델 학습 결과 -->
+        <div id="timing-training-result" style="display:none;margin-bottom:20px;padding:16px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);">타이밍 모델 학습 결과</h3>
+                <button class="btn" onclick="document.getElementById('timing-training-result').style.display='none'" style="padding:4px 8px;font-size:11px;">닫기</button>
+            </div>
+            <div id="timing-training-content" style="font-size:12px;color:var(--text-secondary);"></div>
+        </div>
+
+        <!-- 정책 모델 학습 결과 -->
+        <div id="policy-training-result" style="display:none;margin-bottom:20px;padding:16px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);">정책 모델 학습 결과</h3>
+                <button class="btn" onclick="document.getElementById('policy-training-result').style.display='none'" style="padding:4px 8px;font-size:11px;">닫기</button>
+            </div>
+            <div id="policy-training-content" style="font-size:12px;color:var(--text-secondary);"></div>
+        </div>
+
+        <!-- 정책 요약 모달 -->
+        <div class="modal" id="policy-summary-modal" style="display:none;">
+            <div class="modal-content" style="max-width:700px;">
+                <div class="modal-header">
+                    <h2>정책 모델 요약</h2>
+                    <button class="modal-close" onclick="closePolicySummary()">&times;</button>
+                </div>
+                <div class="modal-body" id="policy-summary-content" style="font-size:12px;">
+                    로딩 중...
+                </div>
+            </div>
+        </div>
+
+        <!-- 학습 가능 심볼 모달 -->
+        <div class="modal" id="trainable-symbols-modal" style="display:none;">
+            <div class="modal-content" style="max-width:900px;">
+                <div class="modal-header">
+                    <h2>학습 가능한 심볼</h2>
+                    <button class="modal-close" onclick="closeTrainableSymbols()">&times;</button>
+                </div>
+                <div class="modal-body" id="trainable-symbols-content" style="font-size:12px;">
+                    로딩 중...
+                </div>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-container">
+            <div id="loading" class="loading" style="display: none;">로딩 중...</div>
+            <div id="empty" class="empty" style="display: none;">데이터가 없습니다</div>
+            <table id="matching-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Signal ID</th>
+                        <th>Symbol</th>
+                        <th>Type</th>
+                        <th>Signal Time</th>
+                        <th>Enter Time</th>
+                        <th>Exit Time</th>
+                        <th>Enter Price</th>
+                        <th>Exit Price</th>
+                        <th>PnL</th>
+                        <th>PnL %</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="matching-tbody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let currentDataset = null;
+        let authToken = localStorage.getItem('auth_token') || '';
+        let trainingStatusMap = {}; // 심볼별 학습 상태
+
+        // 초기 로드
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 인증 확인
+            if (!authToken) {
+                console.warn('인증 토큰이 없습니다. 로그인이 필요할 수 있습니다.');
+            }
+            await loadSymbols();
+            setDefaultDates();
+            // 초기 로드는 약간 지연 (심볼 로드 후)
+            setTimeout(() => {
+                loadDataset();
+            }, 500);
+        });
+
+        function setDefaultDates() {
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            document.getElementById('filter-end-date').value = todayStr;
+            document.getElementById('filter-start-date').value = todayStr;
+        }
+
+        async function loadSymbols() {
+            try {
+                const response = await fetch('/api/signals/list?limit=1000');
+                const data = await response.json();
+                const symbols = [...new Set(data.signals.map(s => s.symbol))].sort();
+                const select = document.getElementById('filter-symbol');
+                symbols.forEach(symbol => {
+                    const option = document.createElement('option');
+                    option.value = symbol;
+                    option.textContent = symbol;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('심볼 로드 실패:', error);
+            }
+        }
+
+        async function loadDataset() {
+            const symbol = document.getElementById('filter-symbol').value;
+            const startDate = document.getElementById('filter-start-date').value;
+            const endDate = document.getElementById('filter-end-date').value;
+            const timeWindow = document.getElementById('filter-time-window').value;
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('empty').style.display = 'none';
+            document.getElementById('matching-table').style.display = 'none';
+
+            try {
+                const params = new URLSearchParams();
+                if (symbol) params.append('symbol', symbol);
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+                params.append('max_time_window_minutes', timeWindow);
+
+                const response = await fetch(`/api/matching/dataset?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorDetail = '';
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorDetail = errorJson.detail || errorText;
+                    } catch {
+                        errorDetail = errorText || `HTTP ${response.status}`;
+                    }
+                    
+                    if (response.status === 401) {
+                        alert('인증이 필요합니다. 로그인해주세요.');
+                        window.location.href = '/login';
+                        return;
+                    }
+                    throw new Error(`${response.status}: ${errorDetail}`);
+                }
+
+                const result = await response.json();
+                currentDataset = result;
+
+                // 디버깅
+                console.log('API 응답:', result);
+                console.log('Dataset 길이:', result.dataset?.length);
+                console.log('Matched count:', result.matched_count);
+                console.log('Total signals:', result.total_signals);
+                console.log('Filters:', result.filters);
+
+                // 데이터가 없는 경우 더 자세한 메시지
+                if (!result.dataset || result.dataset.length === 0) {
+                    console.warn('데이터셋이 비어있습니다.');
+                    if (result.total_signals === 0) {
+                        console.warn('신호가 없습니다. 날짜 범위나 심볼 필터를 확인하세요.');
+                    } else if (result.matched_count === 0) {
+                        console.warn('매칭된 데이터가 없습니다. 사용자 액션이나 포지션 데이터를 확인하세요.');
+                    }
+                }
+
+                renderDataset(result);
+                updateStats(result);
+            } catch (error) {
+                console.error('데이터셋 로드 실패:', error);
+                const errorMsg = error.message || '알 수 없는 오류';
+                let userMsg = `데이터 로드 실패: ${errorMsg}`;
+                
+                if (errorMsg.includes('401') || errorMsg.includes('인증')) {
+                    userMsg = '인증이 필요합니다. 로그인 페이지로 이동합니다.';
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 2000);
+                } else if (errorMsg.includes('500')) {
+                    userMsg = '서버 오류가 발생했습니다. 서버 로그를 확인해주세요.';
+                }
+                
+                alert(userMsg);
+                document.getElementById('empty').style.display = 'block';
+                document.getElementById('empty').textContent = userMsg;
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function renderDataset(result) {
+            const tbody = document.getElementById('matching-tbody');
+            tbody.innerHTML = '';
+
+            // 디버깅
+            console.log('renderDataset 호출:', result);
+            console.log('dataset 존재:', !!result.dataset);
+            console.log('dataset 길이:', result.dataset?.length);
+
+            if (!result.dataset || result.dataset.length === 0) {
+                console.log('데이터셋이 비어있음 - empty 표시');
+                document.getElementById('empty').style.display = 'block';
+                
+                let emptyMessage = '매칭된 데이터가 없습니다.';
+                if (result.total_signals === 0) {
+                    emptyMessage = '해당 기간에 신호가 없습니다. 날짜 범위나 심볼 필터를 확인하세요.';
+                } else if (result.matched_count === 0 && result.total_signals > 0) {
+                    emptyMessage = `신호는 ${result.total_signals}개 있지만 매칭된 데이터가 없습니다. 사용자 액션이나 포지션 데이터를 확인하세요.`;
+                }
+                
+                document.getElementById('empty').textContent = emptyMessage;
+                document.getElementById('matching-table').style.display = 'none';
+                return;
+            }
+
+            // 필터 적용
+            const matchStatusFilter = document.getElementById('filter-match-status').value;
+            const symbolFilter = document.getElementById('filter-symbol').value;
+            const trainingStatusFilter = document.getElementById('filter-training-status').value;
+            let filteredDataset = result.dataset;
+            
+            // 심볼 필터 적용
+            if (symbolFilter) {
+                filteredDataset = filteredDataset.filter(d => {
+                    const symbol = d.input?.signal?.symbol || '';
+                    return symbol === symbolFilter;
+                });
+            }
+            
+            // 매칭 상태 필터 적용
+            if (matchStatusFilter === 'matched') {
+                filteredDataset = filteredDataset.filter(d => d.output && d.output.enter_timing);
+            } else if (matchStatusFilter === 'unmatched') {
+                filteredDataset = filteredDataset.filter(d => !d.output || !d.output.enter_timing);
+            }
+            
+            // 학습 상태 필터 적용
+            if (trainingStatusFilter) {
+                filteredDataset = filteredDataset.filter(d => {
+                    const symbol = d.input?.signal?.symbol || '';
+                    const status = trainingStatusMap[symbol] || trainingStatusMap['ALL'] || {};
+                    const hasTiming = status.timing_trained || false;
+                    const hasPolicy = status.policy_trained || false;
+                    
+                    if (trainingStatusFilter === 'timing') {
+                        return hasTiming;
+                    } else if (trainingStatusFilter === 'policy') {
+                        return hasPolicy;
+                    } else if (trainingStatusFilter === 'both') {
+                        return hasTiming && hasPolicy;
+                    } else if (trainingStatusFilter === 'none') {
+                        return !hasTiming && !hasPolicy;
+                    }
+                    return true;
+                });
+            }
+
+            if (filteredDataset.length === 0) {
+                document.getElementById('empty').style.display = 'block';
+                document.getElementById('empty').textContent = matchStatusFilter === 'matched' 
+                    ? '매칭된 데이터가 없습니다.' 
+                    : '미매칭 데이터가 없습니다.';
+                document.getElementById('matching-table').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('empty').style.display = 'none';
+            document.getElementById('matching-table').style.display = 'table';
+
+            filteredDataset.forEach((item, index) => {
+                try {
+                    const signal = item.input?.signal || {};
+                    const output = item.output || {};
+
+                    // 디버깅 (첫 번째 항목만)
+                    if (index === 0) {
+                        console.log('첫 번째 데이터 항목:', item);
+                        console.log('signal:', signal);
+                        console.log('output:', output);
+                    }
+
+                    const row = document.createElement('tr');
+                    const signalTime = signal.created_at ? new Date(signal.created_at).toLocaleString('ko-KR') : '-';
+                    const enterTime = output.enter_timing ? new Date(output.enter_timing).toLocaleString('ko-KR') : '-';
+                    const exitTime = output.exit_timing ? new Date(output.exit_timing).toLocaleString('ko-KR') : '-';
+                    const matched = output.enter_timing ? 'matched' : 'unmatched';
+                    const pnl = output.pnl !== null && output.pnl !== undefined ? output.pnl : null;
+                    const pnlPercent = output.pnl_percent !== null && output.pnl_percent !== undefined ? output.pnl_percent : null;
+
+                    const symbol = signal.symbol || '-';
+                    const status = trainingStatusMap[symbol] || trainingStatusMap['ALL'] || {};
+                    let symbolDisplay = symbol;
+                    if (status.timing_trained && status.policy_trained) {
+                        symbolDisplay = `<span style="cursor:pointer;text-decoration:underline;" onclick="showTrainingDetails('${symbol}')" title="학습 상세 보기">${symbol}</span> ✓✓`;
+                    } else if (status.timing_trained) {
+                        symbolDisplay = `<span style="cursor:pointer;text-decoration:underline;" onclick="showTrainingDetails('${symbol}')" title="학습 상세 보기">${symbol}</span> ⏱️`;
+                    } else if (status.policy_trained) {
+                        symbolDisplay = `<span style="cursor:pointer;text-decoration:underline;" onclick="showTrainingDetails('${symbol}')" title="학습 상세 보기">${symbol}</span> 🎯`;
+                    } else {
+                        symbolDisplay = `<span style="cursor:pointer;text-decoration:underline;" onclick="showTrainingDetails('${symbol}')" title="학습 상세 보기">${symbol}</span>`;
+                    }
+
+                row.innerHTML = `
+                    <td>${signal.signal_id ? signal.signal_id.substring(0, 12) + '...' : '-'}</td>
+                    <td><strong>${symbolDisplay}</strong></td>
+                    <td><span class="badge badge-${signal.signal_type === 'buy' ? 'buy' : 'sell'}">${signal.signal_type?.toUpperCase() || '-'}</span></td>
+                    <td>${signalTime}</td>
+                    <td>${enterTime}</td>
+                    <td>${exitTime}</td>
+                    <td>${output.enter_price ? '$' + Number(output.enter_price).toFixed(2) : '-'}</td>
+                    <td>${output.exit_price ? '$' + Number(output.exit_price).toFixed(2) : '-'}</td>
+                    <td class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pnl !== null ? (pnl >= 0 ? '+' : '') + '$' + Number(pnl).toFixed(2) : '-'}</td>
+                    <td class="${pnlPercent >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pnlPercent !== null ? (pnlPercent >= 0 ? '+' : '') + Number(pnlPercent).toFixed(2) + '%' : '-'}</td>
+                    <td><span class="badge badge-${matched}">${matched === 'matched' ? '매칭됨' : '미매칭'}</span></td>
+                `;
+                    tbody.appendChild(row);
+                } catch (error) {
+                    console.error(`데이터 렌더링 실패 (인덱스 ${index}):`, error, item);
+                }
+            });
+            
+            console.log(`총 ${filteredDataset.length}개 행 렌더링 완료 (전체 ${result.dataset.length}개 중)`);
+        }
+
+        function updateStats(result) {
+            let dataset = result.dataset || [];
+            
+            // 필터 적용 (통계 계산 시에도 동일한 필터 적용)
+            const symbolFilter = document.getElementById('filter-symbol').value;
+            const matchStatusFilter = document.getElementById('filter-match-status').value;
+            
+            if (symbolFilter) {
+                dataset = dataset.filter(d => {
+                    const symbol = d.input?.signal?.symbol || '';
+                    return symbol === symbolFilter;
+                });
+            }
+            
+            if (matchStatusFilter === 'matched') {
+                dataset = dataset.filter(d => d.output && d.output.enter_timing);
+            } else if (matchStatusFilter === 'unmatched') {
+                dataset = dataset.filter(d => !d.output || !d.output.enter_timing);
+            }
+            
+            // 실제 데이터셋에서 매칭된 항목 카운트 (enter_timing이 있는 것)
+            const actualMatchedCount = dataset.filter(d => d.output && d.output.enter_timing).length;
+            const totalSignals = dataset.length;
+
+            document.getElementById('stat-total-signals').textContent = totalSignals.toLocaleString();
+            document.getElementById('stat-matched').textContent = actualMatchedCount.toLocaleString();
+            document.getElementById('stat-match-rate').textContent = totalSignals > 0 
+                ? ((actualMatchedCount / totalSignals) * 100).toFixed(1) + '%' 
+                : '0%';
+            document.getElementById('stat-dataset-size').textContent = dataset.length.toLocaleString();
+
+            // PnL 통계
+            const pnls = dataset.filter(d => d.output.pnl !== null && d.output.pnl !== undefined).map(d => d.output.pnl);
+            const avgPnl = pnls.length > 0 ? pnls.reduce((a, b) => a + b, 0) / pnls.length : 0;
+            document.getElementById('stat-avg-pnl').textContent = avgPnl >= 0 
+                ? '+' + '$' + avgPnl.toFixed(2) 
+                : '$' + avgPnl.toFixed(2);
+
+            // 승률
+            const wins = pnls.filter(p => p > 0).length;
+            const winRate = pnls.length > 0 ? (wins / pnls.length) * 100 : 0;
+            document.getElementById('stat-winrate').textContent = winRate.toFixed(1) + '%';
+        }
+
+        function applyFilters() {
+            // Training Status 필터는 클라이언트 사이드 필터이므로
+            // 이미 로드된 데이터를 필터링만 하면 됨
+            const trainingStatusFilter = document.getElementById('filter-training-status').value;
+            
+            // Training Status 필터만 변경된 경우 (날짜/심볼 변경 없음)
+            if (trainingStatusFilter && currentDataset && currentDataset.dataset) {
+                // 이미 로드된 데이터를 다시 렌더링 (필터 적용)
+                renderDataset(currentDataset);
+                updateStats(currentDataset);
+            } else {
+                // 날짜나 심볼 필터가 변경된 경우 서버에서 다시 로드
+                loadDataset();
+            }
+        }
+
+        function downloadDataset() {
+            if (!currentDataset || !currentDataset.dataset) {
+                alert('먼저 데이터를 로드해주세요.');
+                return;
+            }
+
+            const dataset = currentDataset.dataset;
+            const headers = ['Signal ID', 'Symbol', 'Type', 'Signal Time', 'Enter Time', 'Exit Time', 
+                           'Enter Price', 'Exit Price', 'PnL', 'PnL %', 'Strategy', 'Confidence'];
+            
+            let csv = headers.join(',') + '\n';
+            
+            dataset.forEach(item => {
+                const signal = item.input.signal;
+                const output = item.output;
+                const row = [
+                    signal.signal_id || '',
+                    signal.symbol || '',
+                    signal.signal_type || '',
+                    signal.created_at || '',
+                    output.enter_timing || '',
+                    output.exit_timing || '',
+                    output.enter_price || '',
+                    output.exit_price || '',
+                    output.pnl || '',
+                    output.pnl_percent || '',
+                    signal.strategy_name || '',
+                    signal.confidence || ''
+                ];
+                csv += row.map(r => `"${r}"`).join(',') + '\n';
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `matching_dataset_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        }
+
+        // 타이밍 모델 학습
+        async function trainTimingModel() {
+            const symbol = document.getElementById('filter-symbol').value;
+            const startDate = document.getElementById('filter-start-date').value;
+            const endDate = document.getElementById('filter-end-date').value;
+            const timeWindow = document.getElementById('filter-time-window').value;
+
+            const btn = document.getElementById('train-timing-btn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '학습 중...';
+
+            try {
+                const params = new URLSearchParams();
+                if (symbol) params.append('symbol', symbol);
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+                params.append('max_time_window_minutes', timeWindow);
+
+                const response = await fetch(`/api/timing/train?${params}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    const trainingResult = result.training_result;
+                    const content = document.getElementById('timing-training-content');
+                    
+                    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-bottom:12px;">';
+                    html += `<div><strong>학습 샘플:</strong> ${trainingResult.samples}개</div>`;
+                    html += `<div><strong>진입 샘플:</strong> ${trainingResult.enter_samples}개</div>`;
+                    html += `<div><strong>청산 샘플:</strong> ${trainingResult.exit_samples}개</div>`;
+                    html += `<div><strong>시장 상태 패턴:</strong> ${trainingResult.state_patterns}개</div>`;
+                    html += '</div>';
+
+                    if (trainingResult.enter_stats && trainingResult.enter_stats.count > 0) {
+                        html += '<div style="margin-top:12px;padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                        html += '<div style="font-weight:600;margin-bottom:8px;">진입 타이밍 통계</div>';
+                        html += `<div>평균: ${trainingResult.enter_stats.mean.toFixed(2)}분</div>`;
+                        html += `<div>중앙값: ${trainingResult.enter_stats.median.toFixed(2)}분</div>`;
+                        html += `<div>25%: ${trainingResult.enter_stats.percentile_25.toFixed(2)}분, 75%: ${trainingResult.enter_stats.percentile_75.toFixed(2)}분</div>`;
+                        html += '</div>';
+                    }
+
+                    if (trainingResult.exit_stats && trainingResult.exit_stats.count > 0) {
+                        html += '<div style="margin-top:12px;padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                        html += '<div style="font-weight:600;margin-bottom:8px;">청산 타이밍 통계</div>';
+                        html += `<div>평균: ${trainingResult.exit_stats.mean.toFixed(2)}분</div>`;
+                        html += `<div>중앙값: ${trainingResult.exit_stats.median.toFixed(2)}분</div>`;
+                        html += `<div>25%: ${trainingResult.exit_stats.percentile_25.toFixed(2)}분, 75%: ${trainingResult.exit_stats.percentile_75.toFixed(2)}분</div>`;
+                        html += '</div>';
+                    }
+
+                    content.innerHTML = html;
+                    document.getElementById('timing-training-result').style.display = 'block';
+                    
+                    // 학습 상태 새로고침
+                    await refreshTrainingStatus();
+                    
+                    showToast('타이밍 모델 학습 완료!', 'success');
+                } else {
+                    throw new Error(result.message || '학습 실패');
+                }
+            } catch (error) {
+                console.error('타이밍 모델 학습 실패:', error);
+                showToast('학습 실패: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        // 정책 모델 학습
+        async function trainPolicyModel() {
+            const symbol = document.getElementById('filter-symbol').value;
+            const startDate = document.getElementById('filter-start-date').value;
+            const endDate = document.getElementById('filter-end-date').value;
+            const timeWindow = document.getElementById('filter-time-window').value;
+
+            const btn = document.getElementById('train-policy-btn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '학습 중...';
+
+            try {
+                const params = new URLSearchParams();
+                if (symbol) params.append('symbol', symbol);
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+                params.append('max_time_window_minutes', timeWindow);
+
+                const response = await fetch(`/api/policy/train?${params}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    const trainingResult = result.training_result;
+                    const content = document.getElementById('policy-training-content');
+                    
+                    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-bottom:12px;">';
+                    html += `<div><strong>학습 샘플:</strong> ${trainingResult.samples}개</div>`;
+                    html += `<div><strong>정책 샘플:</strong> ${trainingResult.policy_samples}개</div>`;
+                    html += `<div><strong>시장 상태 패턴:</strong> ${trainingResult.state_patterns}개</div>`;
+                    html += `<div><strong>전략 패턴:</strong> ${trainingResult.strategy_patterns}개</div>`;
+                    html += `<div><strong>파라미터 추천:</strong> ${trainingResult.parameter_recommendations}개</div>`;
+                    html += '</div>';
+
+                    content.innerHTML = html;
+                    document.getElementById('policy-training-result').style.display = 'block';
+                    
+                    // 학습 상태 새로고침
+                    await refreshTrainingStatus();
+                    
+                    showToast('정책 모델 학습 완료!', 'success');
+                } else {
+                    throw new Error(result.message || '학습 실패');
+                }
+            } catch (error) {
+                console.error('정책 모델 학습 실패:', error);
+                showToast('학습 실패: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        // 정책 요약 표시
+        async function showPolicySummary() {
+            const symbol = document.getElementById('filter-symbol').value;
+            const startDate = document.getElementById('filter-start-date').value;
+            const endDate = document.getElementById('filter-end-date').value;
+            const timeWindow = document.getElementById('filter-time-window').value;
+
+            const modal = document.getElementById('policy-summary-modal');
+            const content = document.getElementById('policy-summary-content');
+            modal.style.display = 'flex';
+            content.innerHTML = '로딩 중...';
+
+            try {
+                const params = new URLSearchParams();
+                if (symbol) params.append('symbol', symbol);
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+                params.append('max_time_window_minutes', timeWindow);
+
+                const response = await fetch(`/api/policy/summary?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success && result.summary) {
+                    const summary = result.summary;
+                    
+                    let html = '<div style="display:grid;gap:16px;">';
+                    
+                    // 최고 성과 시장 상태
+                    if (summary.best_states && summary.best_states.length > 0) {
+                        html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                        html += '<div style="font-weight:600;margin-bottom:8px;color:var(--text-primary);">최고 성과 시장 상태</div>';
+                        html += '<div style="display:grid;gap:8px;">';
+                        summary.best_states.forEach(state => {
+                            const recColor = state.recommendation === '강력 추천' ? 'var(--green)' : 
+                                           state.recommendation === '추천' ? 'var(--blue)' : 
+                                           state.recommendation === '비추천' ? 'var(--red)' : 'var(--text-secondary)';
+                            html += `<div style="padding:8px;background:var(--bg-primary);border-radius:4px;border-left:3px solid ${recColor};">`;
+                            html += `<div style="font-weight:500;">${state.market_key}</div>`;
+                            html += `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">`;
+                            html += `승률: ${state.win_rate.toFixed(1)}% | 평균 수익: ${state.avg_pnl_percent.toFixed(2)}% | ${state.recommendation}`;
+                            html += `</div></div>`;
+                        });
+                        html += '</div></div>';
+                    }
+
+                    // 최고 성과 전략
+                    if (summary.best_strategies && summary.best_strategies.length > 0) {
+                        html += '<div style="padding:12px;background:var(--bg-tertiary);border-radius:6px;">';
+                        html += '<div style="font-weight:600;margin-bottom:8px;color:var(--text-primary);">최고 성과 전략</div>';
+                        html += '<div style="display:grid;gap:8px;">';
+                        summary.best_strategies.forEach(strategy => {
+                            const recColor = strategy.recommendation === '강력 추천' ? 'var(--green)' : 
+                                           strategy.recommendation === '추천' ? 'var(--blue)' : 
+                                           strategy.recommendation === '비추천' ? 'var(--red)' : 'var(--text-secondary)';
+                            html += `<div style="padding:8px;background:var(--bg-primary);border-radius:4px;border-left:3px solid ${recColor};">`;
+                            html += `<div style="font-weight:500;">${strategy.strategy}</div>`;
+                            html += `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">`;
+                            html += `승률: ${strategy.win_rate.toFixed(1)}% | 평균 수익: ${strategy.avg_pnl_percent.toFixed(2)}% | ${strategy.recommendation}`;
+                            html += `</div></div>`;
+                        });
+                        html += '</div></div>';
+                    }
+
+                    html += '</div>';
+                    content.innerHTML = html;
+                } else {
+                    content.innerHTML = `<div style="padding:12px;background:var(--red-bg);border-radius:4px;color:var(--red);">${result.message || '요약 정보를 가져올 수 없습니다'}</div>`;
+                }
+            } catch (error) {
+                console.error('정책 요약 조회 실패:', error);
+                content.innerHTML = `<div style="padding:12px;background:var(--red-bg);border-radius:4px;color:var(--red);">조회 실패: ${error.message}</div>`;
+            }
+        }
+
+        function closePolicySummary() {
+            document.getElementById('policy-summary-modal').style.display = 'none';
+        }
+
+        // 모달 외부 클릭 시 닫기
+        document.getElementById('policy-summary-modal')?.addEventListener('click', function(e) {
+            if (e.target === this) closePolicySummary();
+        });
+
+        // Toast 알림 함수 (없으면 추가)
+        function showToast(message, type = 'info') {
+            // 기존 toast 함수가 있으면 사용, 없으면 alert
+            if (typeof window.showToast === 'function') {
+                window.showToast(message, type);
+            } else {
+                alert(message);
+            }
+        }
+
+        // 학습 상세 정보 표시
+        async function showTrainingDetails(symbol) {
+            const modal = document.createElement('div');
+            modal.className = 'modal active';
+            modal.id = 'training-details-modal';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width:800px;">
+                    <div class="modal-header">
+                        <h2>학습 상세 정보 - ${symbol}</h2>
+                        <button class="modal-close" onclick="document.getElementById('training-details-modal').remove()">&times;</button>
+                    </div>
+                    <div class="modal-body" id="training-details-content" style="font-size:12px;">
+                        로딩 중...
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            try {
+                const response = await fetch(`/api/training/details/${symbol}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+                const content = document.getElementById('training-details-content');
+
+                if (response.ok && result.success && result.details) {
+                    const details = result.details;
+                    let html = '<div style="display:grid;gap:20px;">';
+
+                    // 타이밍 모델 정보
+                    if (details.timing && details.timing.trained) {
+                        html += '<div style="padding:16px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--blue);">';
+                        html += '<div style="font-weight:600;margin-bottom:12px;color:var(--text-primary);">⏱️ 타이밍 모델</div>';
+                        html += `<div style="margin-bottom:8px;"><strong>학습 완료:</strong> ${new Date(details.timing.trained_at).toLocaleString('ko-KR')}</div>`;
+                        html += `<div style="margin-bottom:8px;"><strong>데이터셋 크기:</strong> ${details.timing.dataset_size}개</div>`;
+                        if (details.timing.start_date && details.timing.end_date) {
+                            html += `<div style="margin-bottom:8px;"><strong>학습 기간:</strong> ${details.timing.start_date} ~ ${details.timing.end_date}</div>`;
+                        }
+                        const tr = details.timing.training_result;
+                        if (tr) {
+                            html += '<div style="margin-top:12px;padding:12px;background:var(--bg-primary);border-radius:4px;">';
+                            html += `<div style="margin-bottom:8px;"><strong>학습 샘플:</strong> ${tr.samples || 0}개</div>`;
+                            html += `<div style="margin-bottom:8px;"><strong>진입 샘플:</strong> ${tr.enter_samples || 0}개</div>`;
+                            html += `<div style="margin-bottom:8px;"><strong>청산 샘플:</strong> ${tr.exit_samples || 0}개</div>`;
+                            if (tr.enter_stats) {
+                                html += '<div style="margin-top:8px;padding:8px;background:var(--bg-secondary);border-radius:4px;">';
+                                html += '<div style="font-weight:500;margin-bottom:4px;">진입 타이밍 통계</div>';
+                                html += `<div>평균: ${tr.enter_stats.mean?.toFixed(2) || 0}분</div>`;
+                                html += `<div>중앙값: ${tr.enter_stats.median?.toFixed(2) || 0}분</div>`;
+                                html += '</div>';
+                            }
+                            if (tr.exit_stats) {
+                                html += '<div style="margin-top:8px;padding:8px;background:var(--bg-secondary);border-radius:4px;">';
+                                html += '<div style="font-weight:500;margin-bottom:4px;">청산 타이밍 통계</div>';
+                                html += `<div>평균: ${tr.exit_stats.mean?.toFixed(2) || 0}분</div>`;
+                                html += `<div>중앙값: ${tr.exit_stats.median?.toFixed(2) || 0}분</div>`;
+                                html += '</div>';
+                            }
+                            html += '</div>';
+                        }
+                        html += '</div>';
+                    } else {
+                        html += '<div style="padding:16px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--text-muted);">';
+                        html += '<div style="font-weight:600;margin-bottom:12px;color:var(--text-secondary);">⏱️ 타이밍 모델</div>';
+                        html += '<div style="color:var(--text-muted);">학습되지 않음</div>';
+                        html += '</div>';
+                    }
+
+                    // 정책 모델 정보
+                    if (details.policy && details.policy.trained) {
+                        html += '<div style="padding:16px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--green);">';
+                        html += '<div style="font-weight:600;margin-bottom:12px;color:var(--text-primary);">🎯 정책 모델</div>';
+                        html += `<div style="margin-bottom:8px;"><strong>학습 완료:</strong> ${new Date(details.policy.trained_at).toLocaleString('ko-KR')}</div>`;
+                        html += `<div style="margin-bottom:8px;"><strong>데이터셋 크기:</strong> ${details.policy.dataset_size}개</div>`;
+                        if (details.policy.start_date && details.policy.end_date) {
+                            html += `<div style="margin-bottom:8px;"><strong>학습 기간:</strong> ${details.policy.start_date} ~ ${details.policy.end_date}</div>`;
+                        }
+                        const pr = details.policy.training_result;
+                        if (pr) {
+                            html += '<div style="margin-top:12px;padding:12px;background:var(--bg-primary);border-radius:4px;">';
+                            html += `<div style="margin-bottom:8px;"><strong>학습 샘플:</strong> ${pr.samples || 0}개</div>`;
+                            html += `<div style="margin-bottom:8px;"><strong>정책 샘플:</strong> ${pr.policy_samples || 0}개</div>`;
+                            html += `<div style="margin-bottom:8px;"><strong>시장 상태 패턴:</strong> ${pr.state_patterns || 0}개</div>`;
+                            html += `<div style="margin-bottom:8px;"><strong>전략 패턴:</strong> ${pr.strategy_patterns || 0}개</div>`;
+                            html += '</div>';
+                        }
+                        html += '</div>';
+                    } else {
+                        html += '<div style="padding:16px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--text-muted);">';
+                        html += '<div style="font-weight:600;margin-bottom:12px;color:var(--text-secondary);">🎯 정책 모델</div>';
+                        html += '<div style="color:var(--text-muted);">학습되지 않음</div>';
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                    content.innerHTML = html;
+                } else {
+                    content.innerHTML = `<div style="padding:12px;background:var(--red-bg);border-radius:4px;color:var(--red);">${result.message || '학습 데이터를 찾을 수 없습니다'}</div>`;
+                }
+            } catch (error) {
+                console.error('학습 상세 조회 실패:', error);
+                const content = document.getElementById('training-details-content');
+                content.innerHTML = `<div style="padding:12px;background:var(--red-bg);border-radius:4px;color:var(--red);">조회 실패: ${error.message}</div>`;
+            }
+
+            // 모달 외부 클릭 시 닫기
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+        }
+
+        // 학습 완료 후 상태 새로고침
+        async function refreshTrainingStatus() {
+            await loadTrainingStatus();
+            // 심볼 목록 다시 로드
+            await loadSymbols();
+            // 데이터셋 다시 렌더링 (학습 표시 업데이트)
+            if (currentDataset) {
+                renderDataset(currentDataset);
+            }
+        }
+
+        // 학습 가능한 심볼 찾기
+        async function checkTrainableSymbols() {
+            const startDate = document.getElementById('filter-start-date').value;
+            const endDate = document.getElementById('filter-end-date').value;
+            const timeWindow = document.getElementById('filter-time-window').value;
+
+            const modal = document.getElementById('trainable-symbols-modal');
+            const content = document.getElementById('trainable-symbols-content');
+            
+            if (!modal || !content) {
+                console.error('모달 요소를 찾을 수 없습니다.');
+                alert('모달 요소를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+                return;
+            }
+            
+            modal.style.display = 'flex';
+            content.innerHTML = '로딩 중...';
+
+            try {
+                const params = new URLSearchParams();
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+                params.append('max_time_window_minutes', timeWindow);
+                params.append('min_samples', '10'); // 최소 10개 샘플 필요
+
+                const response = await fetch(`/api/matching/check-symbols?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    let html = '<div style="display:grid;gap:20px;">';
+                    
+                    // 학습 필요 조건 설명
+                    html += '<div style="padding:16px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--yellow);">';
+                    html += '<div style="font-weight:600;margin-bottom:12px;color:var(--text-primary);">📚 학습에 필요한 데이터</div>';
+                    html += '<div style="display:grid;gap:8px;font-size:12px;color:var(--text-secondary);">';
+                    html += '<div style="padding:8px;background:var(--bg-primary);border-radius:4px;">';
+                    html += '<div style="font-weight:500;color:var(--text-primary);margin-bottom:4px;">1. 신호 데이터</div>';
+                    html += '<div style="font-size:11px;margin-left:8px;">• 전략에 의해 생성된 거래 신호 (BUY/SELL)</div>';
+                    html += '<div style="font-size:11px;margin-left:8px;">• 신호 생성 시간, 가격, 심볼 정보 포함</div>';
+                    html += '</div>';
+                    html += '<div style="padding:8px;background:var(--bg-primary);border-radius:4px;">';
+                    html += '<div style="font-weight:500;color:var(--text-primary);margin-bottom:4px;">2. 매칭된 액션 데이터</div>';
+                    html += '<div style="font-size:11px;margin-left:8px;">• 사용자가 기록한 진입/청산 액션</div>';
+                    html += '<div style="font-size:11px;margin-left:8px;">• 또는 실제 거래 포지션 데이터 (Binance 동기화)</div>';
+                    html += '<div style="font-size:11px;margin-left:8px;">• 진입 가격, 청산 가격, 수익률(PnL) 포함</div>';
+                    html += '</div>';
+                    html += '<div style="padding:8px;background:var(--bg-primary);border-radius:4px;">';
+                    html += '<div style="font-weight:500;color:var(--text-primary);margin-bottom:4px;">3. 최소 샘플 수</div>';
+                    html += `<div style="font-size:11px;margin-left:8px;">• <strong style="color:var(--green);">최소 ${result.min_samples}개</strong> 이상의 매칭된 데이터 필요</div>`;
+                    html += '<div style="font-size:11px;margin-left:8px;">• 권장: 50개 이상 (더 정확한 학습)</div>';
+                    html += '</div>';
+                    html += '<div style="padding:8px;background:var(--bg-primary);border-radius:4px;">';
+                    html += '<div style="font-weight:500;color:var(--text-primary);margin-bottom:4px;">4. 시장 상태 데이터</div>';
+                    html += '<div style="font-size:11px;margin-left:8px;">• 캔들 데이터 (가격, 거래량)</div>';
+                    html += '<div style="font-size:11px;margin-left:8px;">• 기술 지표 (EMA, RSI, ATR, 볼린저 밴드)</div>';
+                    html += '<div style="font-size:11px;margin-left:8px;">• 트렌드, 변동성, RSI 상태 정보</div>';
+                    html += '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                    
+                    // 요약 정보
+                    html += '<div style="padding:16px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--blue);">';
+                    html += '<div style="font-weight:600;margin-bottom:12px;color:var(--text-primary);">📊 요약</div>';
+                    html += `<div style="margin-bottom:8px;"><strong>전체 심볼:</strong> ${result.total_checked}개</div>`;
+                    html += `<div style="margin-bottom:8px;"><strong>학습 가능:</strong> <span style="color:var(--green);font-weight:700;">${result.trainable_count}개</span></div>`;
+                    html += `<div style="margin-bottom:8px;"><strong>학습 불가:</strong> <span style="color:var(--text-secondary);">${result.total_checked - result.trainable_count}개</span></div>`;
+                    html += `<div style="margin-bottom:8px;"><strong>최소 샘플 수:</strong> ${result.min_samples}개</div>`;
+                    if (result.filters.start_date && result.filters.end_date) {
+                        html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border-color);font-size:11px;color:var(--text-secondary);">기간: ${result.filters.start_date} ~ ${result.filters.end_date}</div>`;
+                    }
+                    html += '</div>';
+
+                    // 학습 가능한 심볼
+                    if (result.trainable_symbols && result.trainable_symbols.length > 0) {
+                        html += '<div style="padding:16px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--green);">';
+                        html += '<div style="font-weight:600;margin-bottom:12px;color:var(--text-primary);">✅ 학습 가능한 심볼</div>';
+                        html += '<div style="display:grid;gap:8px;max-height:300px;overflow-y:auto;">';
+                        result.trainable_symbols.forEach(symbol => {
+                            html += '<div style="padding:12px;background:var(--bg-primary);border-radius:4px;border:1px solid var(--border-color);">';
+                            html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">`;
+                            html += `<div style="font-weight:600;font-size:14px;color:var(--text-primary);">${symbol.symbol}</div>`;
+                            html += `<div style="padding:4px 8px;background:var(--green-bg);color:var(--green);border-radius:4px;font-size:11px;font-weight:600;">${symbol.matched_count}개 매칭</div>`;
+                            html += `</div>`;
+                            html += `<div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;font-size:11px;color:var(--text-secondary);">`;
+                            html += `<div>신호: ${symbol.total_signals}개</div>`;
+                            html += `<div>데이터셋: ${symbol.dataset_size}개</div>`;
+                            html += `<div>승률: ${symbol.win_rate.toFixed(1)}%</div>`;
+                            html += `<div>평균 PnL: ${symbol.avg_pnl >= 0 ? '+' : ''}$${symbol.avg_pnl.toFixed(2)}</div>`;
+                            html += `</div>`;
+                            html += '</div>';
+                        });
+                        html += '</div></div>';
+                    } else {
+                        html += '<div style="padding:16px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--text-muted);">';
+                        html += '<div style="font-weight:600;margin-bottom:12px;color:var(--text-secondary);">✅ 학습 가능한 심볼</div>';
+                        html += '<div style="color:var(--text-muted);">없음</div>';
+                        html += '</div>';
+                    }
+
+                    // 학습 불가능한 심볼
+                    if (result.not_trainable_symbols && result.not_trainable_symbols.length > 0) {
+                        html += '<div style="padding:16px;background:var(--bg-tertiary);border-radius:6px;border-left:3px solid var(--text-muted);">';
+                        html += '<div style="font-weight:600;margin-bottom:12px;color:var(--text-primary);">❌ 학습 불가능한 심볼</div>';
+                        html += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));gap:6px;max-height:200px;overflow-y:auto;">';
+                        result.not_trainable_symbols.forEach(symbol => {
+                            const percent = result.min_samples > 0 ? (symbol.matched_count / result.min_samples * 100).toFixed(0) : 0;
+                            html += `<div style="padding:8px;background:var(--bg-primary);border-radius:4px;border:1px solid var(--border-color);text-align:center;">`;
+                            html += `<div style="font-weight:500;font-size:12px;margin-bottom:4px;">${symbol.symbol}</div>`;
+                            html += `<div style="font-size:10px;color:var(--text-secondary);">${symbol.matched_count}/${result.min_samples} (${percent}%)</div>`;
+                            html += `</div>`;
+                        });
+                        html += '</div></div>';
+                    }
+
+                    html += '</div>';
+                    content.innerHTML = html;
+                } else {
+                    content.innerHTML = `<div style="padding:12px;background:var(--red-bg);border-radius:4px;color:var(--red);">${result.message || '학습 가능 심볼 확인 실패'}</div>`;
+                }
+            } catch (error) {
+                console.error('학습 가능 심볼 확인 실패:', error);
+                content.innerHTML = `<div style="padding:12px;background:var(--red-bg);border-radius:4px;color:var(--red);">확인 실패: ${error.message}</div>`;
+            }
+        }
+
+        function closeTrainableSymbols() {
+            document.getElementById('trainable-symbols-modal').style.display = 'none';
+        }
+
+        // 모달 외부 클릭 시 닫기
+        document.getElementById('trainable-symbols-modal')?.addEventListener('click', function(e) {
+            if (e.target === this) closeTrainableSymbols();
+        });
+    </script>
+</body>
+</html>

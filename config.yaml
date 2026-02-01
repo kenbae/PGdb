@@ -1,0 +1,170 @@
+db:
+  host: localhost
+  port: 5432
+  name: marketdb
+  user: trader
+  password: kh0070
+  pool_size: 2
+  max_overflow: 3
+  pool_recycle: 3600
+pg:
+  dsn: host=localhost port=5432 dbname=marketdb user=trader password=kh0070
+exchange:
+  name: binance
+  market: usdtm
+  top_n: 50
+  quote: USDT
+  contract: PERP
+  exclude_symbols:
+  - USDCUSDT
+timeframes:
+- 1m
+- 5m
+- 15m
+- 30m
+- 1h
+- 4h
+- 1d
+ingest:
+  backfill_days: 90
+  max_fetch_limit: 1000
+  sleep_ms: 150
+telegram:
+  bot_token: 8157327222:AAFcAq5WsAJgt_ruWUPdNYzINPdB9oF4s0g
+  chat_id: '-5079579202'
+  parse_mode: HTML
+  disable_web_page_preview: true
+ollama:
+  host: http://localhost:11434
+  llm_model: qwen2.5:7b-instruct
+  embed_model: bge-m3
+outcomes:
+  horizon_bars:
+    30m: 48
+    4h: 30
+    1d: 20
+  tie_breaker: sl_first
+  min_age_minutes: 60
+  slippage_pct: 0.05
+report:
+  windows_days:
+  - 7
+  - 30
+  min_trades: 20
+  top_k: 5
+  schedule_label: Daily
+rank_report:
+  days: 30
+  min_trades: 5
+  top_k: 10
+  bottom_k: 5
+  top_pairs_k: 10
+  bottom_pairs_k: 5
+  title: EV Ranking
+risk_report:
+  days: 30
+  min_trades: 5
+  top_k: 8
+  bottom_k: 5
+  title: Risk Report
+llm_reports:
+  prompt_version: v1
+  limit: 50
+  temperature: 0.2
+  tables:
+    signals: signals
+    outcomes: outcomes
+    signals_cols:
+      event_key: signal_id
+      symbol: symbol
+      timeframe: tf
+      signal_type: strategy
+      ts: open_time
+      direction: direction
+      entry: entry
+      stop_loss: stop_loss
+      tp1: take_profit_1
+      tp2: take_profit_2
+      score: score
+      payload: reason_json
+    outcomes_cols:
+      event_key: signal_id
+      exit_time: exit_time
+      result: result
+      r_multiple: r_multiple
+      mfe: mfe
+      mae: mae
+      evaluated_at: evaluated_at
+      exit_price: exit_price
+  embedding:
+    enabled: true
+    embed_text: post_only
+    topk: 5
+signals:
+  ltf: 30m
+  strategy: EMA20_50_CROSS_ALIGNED_HTF
+  score_threshold: 70
+  atr_multiplier: 1.2
+backtest:
+  enabled: false
+  start_date: '2024-01-01'
+  end_date: '2025-12-31'
+  initial_capital: 10000
+  risk_per_trade: 0.02
+ema_scanner:
+  timeframe: 15m
+  top_symbols: 50
+  scan_interval: 60
+  lookback: 200
+  align_fresh_bars: 3
+  prob_history_bars: 1500
+  prob_horizon_bars: 10
+  prob_tp_atr: 1.0
+  prob_sl_atr: 1.0
+  sl_atr: 1.0
+  tp2_rr: 2.0
+  log_level: info
+  show_skip_reasons: false
+  plain_telegram: true
+  llm_alert: false
+  llm_cooldown_sec: 3600
+trading:
+  mode: live
+  initial_capital: 100.0
+  max_positions: 2
+  max_leverage: 3
+  risk_per_trade: 0.01
+  max_daily_loss: 0.02
+  atr_multiplier: 2.5
+  profit_targets:
+  - 1.618
+  - 2.618
+  - 4.236
+# 전략 설정: DB (tradebot_strategy_settings) 기반. config.yaml 사용 안 함.
+# 초기 시드: scripts/seed_strategy_settings.py
+strategies: {}
+ai:
+  enabled: true
+  ollama_url: http://localhost:11434
+  ollama_model: qwen2.5:7b-instruct
+  min_confidence: 0.65
+  temperature: 0.3
+api:
+  binance:
+    live:
+      api_key: ktS76gvHkFIb8SMOO5lemN639VIAXMxUKCk3ZSjPDaJgA4woCNcAhud01SGpWMiy
+      api_secret: OhTvKLwvdGTRoDqFNy8ah2Z10Ivtd3JQgUy2MEQhTQ52kx7yzebYSsPekOGsekLT
+websocket:
+  enabled: true
+  symbols:
+  - BTCUSDT
+  - ETHUSDT
+  timeframes:
+  - 1m
+  - 5m
+  - 15m
+  - 1h
+  - 4h
+  max_reconnect_attempts: 10
+  save_to_db: true
+  save_ticker: false

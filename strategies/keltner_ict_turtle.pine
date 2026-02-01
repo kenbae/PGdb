@@ -1,0 +1,347 @@
+//@version=5
+strategy("Keltner ICT Turtle", shorttitle="KICT Turtle", overlay=true, 
+         initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100,
+         commission_type=strategy.commission.percent, commission_value=0.1)
+
+// ============================================================================
+// 입력 파라미터
+// ============================================================================
+
+// 켈트너 채널
+ema_period = input.int(20, "EMA 기간", minval=1, group="켈트너 채널")
+atr_period = input.int(20, "ATR 기간", minval=1, group="켈트너 채널")
+atr_multiplier = input.float(2.5, "ATR 배수", minval=0.1, step=0.1, group="켈트너 채널")
+
+// 돈치안 채널 (터틀)
+donchian_period = input.int(55, "돈치안 기간", minval=1, group="돈치안 채널")
+
+// 볼륨 필터
+volume_multiplier = input.float(1.3, "볼륨 배수", minval=1.0, step=0.1, group="필터")
+volume_ma_period = input.int(20, "볼륨 MA 기간", minval=1, group="필터")
+
+// RSI 필터
+rsi_period = input.int(14, "RSI 기간", minval=1, group="RSI 필터")
+rsi_overbought = input.int(70, "RSI 과매수", minval=50, maxval=100, group="RSI 필터")
+rsi_oversold = input.int(30, "RSI 과매도", minval=0, maxval=50, group="RSI 필터")
+
+// ICT 파라미터
+ob_lookback = input.int(10, "Order Block 탐색 기간", minval=1, group="ICT")
+fvg_min_gap_pct = input.float(0.1, "FVG 최소 갭 (%)", minval=0.01, step=0.01, group="ICT")
+require_ict = input.bool(false, "ICT 구조 필수", group="ICT")
+
+// 리스크 관리
+risk_per_trade = input.float(2.0, "거래당 리스크 (%)", minval=0.1, maxval=10.0, step=0.1, group="리스크 관리")
+atr_stop_multiplier = input.float(2.5, "손절 ATR 배수", minval=0.5, step=0.1, group="리스크 관리")
+
+// 피보나치 익절
+tp1_fib = input.float(1.618, "TP1 피보나치", minval=1.0, step=0.1, group="익절")
+tp2_fib = input.float(2.618, "TP2 피보나치", minval=1.0, step=0.1, group="익절")
+tp3_fib = input.float(4.236, "TP3 피보나치", minval=1.0, step=0.1, group="익절")
+
+// 최소 신뢰도
+min_confidence = input.float(0.5, "최소 신뢰도", minval=0.0, maxval=1.0, step=0.1, group="신호 필터")
+
+// ============================================================================
+// 지표 계산
+// ============================================================================
+
+// ATR 계산
+atr_value = ta.atr(atr_period)
+
+// 켈트너 채널
+ema = ta.ema(close, ema_period)
+keltner_upper = ema + (atr_multiplier * atr_value)
+keltner_lower = ema - (atr_multiplier * atr_value)
+
+// 돈치안 채널
+donchian_high = ta.highest(high, donchian_period)
+donchian_low = ta.lowest(low, donchian_period)
+
+// 볼륨 MA
+volume_ma = ta.sma(volume, volume_ma_period)
+
+// RSI
+rsi = ta.rsi(close, rsi_period)
+
+// ============================================================================
+// ICT Order Blocks 식별
+// ============================================================================
+
+// Bullish OB: 강한 상승 직전의 마지막 하락 캔들
+// Pine Script에서는 미래 데이터를 사용할 수 없으므로, 
+// 과거에 하락 캔들 이후 강한 상승이 있었던 경우를 OB로 간주
+is_bullish_candle = close > open
+is_bearish_candle = close < open
+was_bearish_candle = close[1] < open[1]
+was_bullish_candle = close[1] > open[1]
+
+// Bullish OB: 이전 캔들이 하락이었고, 현재/다음 캔들이 강한 상승
+// 과거 관점에서: i-1이 하락, i가 상승, i+1도 상승이었던 경우
+// 현재 시점에서는 i-1이 하락이었고, i가 강한 상승인 경우를 OB로 간주
+strong_bullish = (close - open) > ta.atr(14) * 0.5  // 강한 상승 모멘텀
+bullish_ob = is_bullish_candle and was_bearish_candle and strong_bullish
+
+// Bearish OB: 이전 캔들이 상승이었고, 현재/다음 캔들이 강한 하락
+strong_bearish = (open - close) > ta.atr(14) * 0.5  // 강한 하락 모멘텀
+bearish_ob = is_bearish_candle and was_bullish_candle and strong_bearish
+
+// Order Block 존재 여부 (과거 N개 캔들 내)
+var bool has_bullish_ob = false
+var bool has_bearish_ob = false
+has_bullish_ob := false
+has_bearish_ob := false
+for i = 0 to ob_lookback - 1
+    if bullish_ob[i]
+        has_bullish_ob := true
+    if bearish_ob[i]
+        has_bearish_ob := true
+
+// ============================================================================
+// Fair Value Gaps (FVG) 식별
+// ============================================================================
+
+// Bullish FVG: 캔들 i-2의 high < 캔들 i의 low (중간 캔들 i-1이 갭을 만듦)
+fvg_min_gap = close * (fvg_min_gap_pct / 100)
+bullish_fvg = (low - high[2]) > fvg_min_gap and (low > high[2])
+// Bearish FVG: 캔들 i-2의 low > 캔들 i의 high
+bearish_fvg = (low[2] - high) > fvg_min_gap and (low[2] > high)
+
+// FVG 존재 여부 (과거 N개 캔들 내)
+var bool has_bullish_fvg = false
+var bool has_bearish_fvg = false
+has_bullish_fvg := false
+has_bearish_fvg := false
+for i = 0 to ob_lookback - 1
+    if bullish_fvg[i]
+        has_bullish_fvg := true
+    if bearish_fvg[i]
+        has_bearish_fvg := true
+
+// ICT 구조 확인
+has_bullish_structure = has_bullish_ob or has_bullish_fvg
+has_bearish_structure = has_bearish_ob or has_bearish_fvg
+
+// ============================================================================
+// 진입 조건 평가
+// ============================================================================
+
+// Long 신호 평가
+long_score = 0.0
+long_reasons = array.new_string(0)
+
+// 1. 켈트너 상단 돌파 (필수, +30점)
+keltner_breakout_long = close > keltner_upper
+if keltner_breakout_long
+    long_score := long_score + 0.3
+    array.push(long_reasons, "켈트너 상단 돌파")
+else
+    long_score := -1.0  // 필수 조건 실패
+
+// 2. 돈치안 채널 돌파 (+25점)
+donchian_breakout_long = close > donchian_high[1]
+if donchian_breakout_long and long_score >= 0
+    long_score := long_score + 0.25
+    array.push(long_reasons, "돈치안 돌파")
+
+// 3. 볼륨 확인 (+15점)
+volume_confirmed = volume > (volume_ma * volume_multiplier)
+if volume_confirmed and long_score >= 0
+    long_score := long_score + 0.15
+    array.push(long_reasons, "볼륨 증가")
+
+// 4. RSI 필터 (+10점 또는 -10점)
+if long_score >= 0
+    if rsi < rsi_overbought
+        long_score := long_score + 0.1
+        array.push(long_reasons, "RSI 적정")
+    else
+        long_score := long_score - 0.1
+        array.push(long_reasons, "RSI 과매수")
+
+// 5. ICT 구조 확인 (+20점 또는 필수)
+if long_score >= 0
+    if has_bullish_structure
+        long_score := long_score + 0.2
+        array.push(long_reasons, "Bullish ICT 구조")
+    else if require_ict
+        long_score := -1.0  // ICT 필수인데 없으면 실패
+
+// Long 신호 최종 확인
+long_signal = long_score >= min_confidence
+
+// Short 신호 평가
+short_score = 0.0
+short_reasons = array.new_string(0)
+
+// 1. 켈트너 하단 돌파 (필수, +30점)
+keltner_breakout_short = close < keltner_lower
+if keltner_breakout_short
+    short_score := short_score + 0.3
+    array.push(short_reasons, "켈트너 하단 돌파")
+else
+    short_score := -1.0  // 필수 조건 실패
+
+// 2. 돈치안 채널 하단 돌파 (+25점)
+donchian_breakout_short = close < donchian_low[1]
+if donchian_breakout_short and short_score >= 0
+    short_score := short_score + 0.25
+    array.push(short_reasons, "돈치안 하단 돌파")
+
+// 3. 볼륨 확인 (+15점)
+if volume_confirmed and short_score >= 0
+    short_score := short_score + 0.15
+    array.push(short_reasons, "볼륨 증가")
+
+// 4. RSI 필터 (+10점 또는 -10점)
+if short_score >= 0
+    if rsi > rsi_oversold
+        short_score := short_score + 0.1
+        array.push(short_reasons, "RSI 적정")
+    else
+        short_score := short_score - 0.1
+        array.push(short_reasons, "RSI 과매도")
+
+// 5. ICT 구조 확인 (+20점 또는 필수)
+if short_score >= 0
+    if has_bearish_structure
+        short_score := short_score + 0.2
+        array.push(short_reasons, "Bearish ICT 구조")
+    else if require_ict
+        short_score := -1.0  // ICT 필수인데 없으면 실패
+
+// Short 신호 최종 확인
+short_signal = short_score >= min_confidence
+
+// ============================================================================
+// 손절/익절 계산
+// ============================================================================
+
+// Long 포지션용
+long_stop_distance = atr_value * atr_stop_multiplier
+long_stop_loss = close - long_stop_distance
+long_tp1 = close + (long_stop_distance * tp1_fib)
+long_tp2 = close + (long_stop_distance * tp2_fib)
+long_tp3 = close + (long_stop_distance * tp3_fib)
+
+// Short 포지션용
+short_stop_distance = atr_value * atr_stop_multiplier
+short_stop_loss = close + short_stop_distance
+short_tp1 = close - (short_stop_distance * tp1_fib)
+short_tp2 = close - (short_stop_distance * tp2_fib)
+short_tp3 = close - (short_stop_distance * tp3_fib)
+
+// ============================================================================
+// 전략 실행
+// ============================================================================
+
+// Long 진입
+if long_signal and strategy.position_size == 0
+    strategy.entry("Long", strategy.long, comment="Long 진입")
+    // 첫 번째 TP에서 일부 청산, 나머지는 추적
+    strategy.exit("Long TP1", "Long", qty_percent=33, stop=long_stop_loss, limit=long_tp1, comment="TP1 (33%)")
+    strategy.exit("Long TP2", "Long", qty_percent=33, stop=long_stop_loss, limit=long_tp2, comment="TP2 (33%)")
+    strategy.exit("Long TP3", "Long", stop=long_stop_loss, limit=long_tp3, comment="TP3 (34%)")
+
+// Short 진입
+if short_signal and strategy.position_size == 0
+    strategy.entry("Short", strategy.short, comment="Short 진입")
+    strategy.exit("Short TP1", "Short", qty_percent=33, stop=short_stop_loss, limit=short_tp1, comment="TP1 (33%)")
+    strategy.exit("Short TP2", "Short", qty_percent=33, stop=short_stop_loss, limit=short_tp2, comment="TP2 (33%)")
+    strategy.exit("Short TP3", "Short", stop=short_stop_loss, limit=short_tp3, comment="TP3 (34%)")
+
+// 추세 반전 청산 (켈트너 채널 반대편 이탈)
+if strategy.position_size > 0 and close < keltner_lower
+    strategy.close("Long", comment="추세 반전")
+if strategy.position_size < 0 and close > keltner_upper
+    strategy.close("Short", comment="추세 반전")
+
+// ============================================================================
+// 차트 표시
+// ============================================================================
+
+// 켈트너 채널
+plot(ema, "EMA", color=color.blue, linewidth=1)
+plot(keltner_upper, "켈트너 상단", color=color.green, linewidth=2)
+plot(keltner_lower, "켈트너 하단", color=color.red, linewidth=2)
+
+// 돈치안 채널
+plot(donchian_high, "돈치안 상단", color=color.new(color.green, 50), linewidth=1, style=plot.style_linebr)
+plot(donchian_low, "돈치안 하단", color=color.new(color.red, 50), linewidth=1, style=plot.style_linebr)
+
+// Order Blocks 영역 표시
+plotshape(bullish_ob, style=shape.triangleup, location=location.belowbar, 
+          color=color.green, size=size.small, title="Bullish OB")
+plotshape(bearish_ob, style=shape.triangledown, location=location.abovebar, 
+          color=color.red, size=size.small, title="Bearish OB")
+
+// FVG 영역 표시
+bgcolor(bullish_fvg ? color.new(color.green, 90) : na, title="Bullish FVG")
+bgcolor(bearish_fvg ? color.new(color.red, 90) : na, title="Bearish FVG")
+
+// 진입 신호 표시
+plotshape(long_signal, style=shape.labelup, location=location.belowbar, 
+          color=color.green, textcolor=color.white, text="LONG", size=size.normal)
+plotshape(short_signal, style=shape.labeldown, location=location.abovebar, 
+          color=color.red, textcolor=color.white, text="SHORT", size=size.normal)
+
+// 손절/익절 레벨 표시 (현재 포지션이 있을 때만)
+plot(strategy.position_size > 0 ? long_stop_loss : na, "Long SL", 
+     color=color.red, linewidth=2, style=plot.style_line)
+plot(strategy.position_size > 0 ? long_tp1 : na, "Long TP1", 
+     color=color.green, linewidth=1, style=plot.style_line)
+plot(strategy.position_size > 0 ? long_tp2 : na, "Long TP2", 
+     color=color.green, linewidth=1, style=plot.style_line)
+plot(strategy.position_size > 0 ? long_tp3 : na, "Long TP3", 
+     color=color.green, linewidth=1, style=plot.style_line)
+
+plot(strategy.position_size < 0 ? short_stop_loss : na, "Short SL", 
+     color=color.red, linewidth=2, style=plot.style_line)
+plot(strategy.position_size < 0 ? short_tp1 : na, "Short TP1", 
+     color=color.green, linewidth=1, style=plot.style_line)
+plot(strategy.position_size < 0 ? short_tp2 : na, "Short TP2", 
+     color=color.green, linewidth=1, style=plot.style_line)
+plot(strategy.position_size < 0 ? short_tp3 : na, "Short TP3", 
+     color=color.green, linewidth=1, style=plot.style_line)
+
+// ============================================================================
+// 정보 테이블
+// ============================================================================
+
+var table info_table = table.new(position.top_right, 2, 10, bgcolor=color.new(color.black, 80), 
+                                  border_width=1, border_color=color.gray)
+
+if barstate.islast
+    table.cell(info_table, 0, 0, "지표", text_color=color.white, bgcolor=color.new(color.gray, 50))
+    table.cell(info_table, 1, 0, "값", text_color=color.white, bgcolor=color.new(color.gray, 50))
+    
+    table.cell(info_table, 0, 1, "EMA", text_color=color.white)
+    table.cell(info_table, 1, 1, str.tostring(ema, "#.####"), text_color=color.blue)
+    
+    table.cell(info_table, 0, 2, "켈트너 상단", text_color=color.white)
+    table.cell(info_table, 1, 2, str.tostring(keltner_upper, "#.####"), text_color=color.green)
+    
+    table.cell(info_table, 0, 3, "켈트너 하단", text_color=color.white)
+    table.cell(info_table, 1, 3, str.tostring(keltner_lower, "#.####"), text_color=color.red)
+    
+    table.cell(info_table, 0, 4, "ATR", text_color=color.white)
+    table.cell(info_table, 1, 4, str.tostring(atr_value, "#.####"), text_color=color.yellow)
+    
+    table.cell(info_table, 0, 5, "RSI", text_color=color.white)
+    table.cell(info_table, 1, 5, str.tostring(rsi, "#.##"), 
+               text_color=rsi > rsi_overbought ? color.red : rsi < rsi_oversold ? color.green : color.white)
+    
+    table.cell(info_table, 0, 6, "Long 점수", text_color=color.white)
+    table.cell(info_table, 1, 6, str.tostring(long_score, "#.##"), 
+               text_color=long_signal ? color.green : color.gray)
+    
+    table.cell(info_table, 0, 7, "Short 점수", text_color=color.white)
+    table.cell(info_table, 1, 7, str.tostring(short_score, "#.##"), 
+               text_color=short_signal ? color.red : color.gray)
+    
+    table.cell(info_table, 0, 8, "Bullish ICT", text_color=color.white)
+    table.cell(info_table, 1, 8, has_bullish_structure ? "✓" : "✗", 
+               text_color=has_bullish_structure ? color.green : color.gray)
+    
+    table.cell(info_table, 0, 9, "Bearish ICT", text_color=color.white)
+    table.cell(info_table, 1, 9, has_bearish_structure ? "✓" : "✗", 
+               text_color=has_bearish_structure ? color.red : color.gray)

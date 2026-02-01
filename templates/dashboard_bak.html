@@ -1,0 +1,2014 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modular Crypto Trading Dashboard</title>
+    <!-- Tailwind CSS (먼저 로드) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom CSS (Tailwind 이후에 로드하여 오버라이드) -->
+    <link rel="stylesheet" href="/static/dashboard.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Sortable.js -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <style>
+        /* 드롭다운 z-index 강제 적용 */
+        #symbol-dropdown {
+            z-index: 99999 !important;
+            position: absolute !important;
+        }
+        
+        /* 모든 테이블 요소의 z-index를 낮게 설정 */
+        table, tbody, tr, td, th {
+            position: relative !important;
+            z-index: 1 !important;
+        }
+        
+        /* hover 시에도 z-index 유지 */
+        table tr:hover {
+            z-index: 1 !important;
+        }
+        
+        /* 최근 신호 테이블 영역 */
+        .widget-card {
+            position: relative !important;
+            z-index: 1 !important;
+        }
+        
+        /* 드롭다운 부모 요소들 */
+        .widget-card.mb-6 {
+            z-index: 100 !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-800">📊 모듈식 대시보드</h1>
+                    <p class="text-gray-600 mt-2">위젯을 추가/제거하고 드래그하여 배치하세요</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <!-- 자동 새로고침 토글 -->
+                    <div class="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow">
+                        <span class="text-sm text-gray-700">자동 새로고침</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="autoRefreshToggle" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                        <span id="refreshStatus" class="text-xs text-green-600">ON (30초)</span>
+                    </div>
+                    <button onclick="openWidgetModal()" class="add-widget-btn">
+                        ➕ 위젯 추가
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 위젯 그리드 -->
+        <div id="widgets-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- 위젯이 여기에 동적으로 추가됩니다 -->
+        </div>
+
+        <!-- 기존 차트 및 테이블 섹션은 그대로 유지 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="widget-card resizable-chart" style="cursor: default; position: relative; min-width: 300px; min-height: 300px;">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">결과 분포</h2>
+                <canvas id="resultChart"></canvas>
+                <div class="resize-handle" style="position: absolute; bottom: 0; right: 0; width: 20px; height: 20px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, #cbd5e0 50%);"></div>
+            </div>
+            <div class="widget-card resizable-chart" style="cursor: default; position: relative; min-width: 300px; min-height: 300px;">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">일별 누적 수익</h2>
+                <canvas id="profitChart"></canvas>
+                <div class="resize-handle" style="position: absolute; bottom: 0; right: 0; width: 20px; height: 20px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, #cbd5e0 50%);"></div>
+            </div>
+        </div>
+
+        <!-- 필터 및 검색 -->
+        <div class="widget-card mb-6" style="cursor: default; position: relative; z-index: 10000;">
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="relative" style="z-index: 10000;">
+                    <label class="text-sm font-medium text-gray-700 mr-2">심볼 필터:</label>
+                    <div class="relative inline-block" style="z-index: 10000;">
+                        <input 
+                            type="text" 
+                            id="symbol-search" 
+                            placeholder="심볼 검색..."
+                            class="border border-gray-300 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+                            autocomplete="off"
+                        />
+                        <button 
+                            id="symbol-dropdown-btn"
+                            onclick="toggleSymbolDropdown()"
+                            class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        >
+                            ▼
+                        </button>
+                        <div 
+                            id="symbol-dropdown" 
+                            class="hidden absolute mt-1 w-48 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+                            style="z-index: 9999; scrollbar-width: thin; scrollbar-color: #CBD5E0 #F7FAFC;"
+                        >
+                            <div class="sticky top-0 bg-gray-50 px-3 py-2 border-b flex justify-between items-center">
+                                <button 
+                                    onclick="selectAllSymbols()"
+                                    class="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                >
+                                    전체 보기
+                                </button>
+                                <button 
+                                    onclick="toggleSymbolSort()"
+                                    class="text-xs text-gray-600 hover:text-gray-800 font-medium"
+                                    id="symbol-sort-btn"
+                                >
+                                    A→Z
+                                </button>
+                            </div>
+                            <div id="symbol-list" class="py-1">
+                                <!-- 심볼 목록 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-700 mr-2">표시 개수:</label>
+                    <select id="limit-filter" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="20">20개</option>
+                        <option value="50">50개</option>
+                        <option value="100">100개</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-700 mr-2">정렬:</label>
+                    <select id="sort-select" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="handleSortChange()">
+                        <option value="time-desc">최신순 (시간 ↓)</option>
+                        <option value="time-asc">오래된 순 (시간 ↑)</option>
+                        <option value="r_multiple-desc">R-Multiple 높은 순</option>
+                        <option value="r_multiple-asc">R-Multiple 낮은 순</option>
+                        <option value="score-desc">점수 높은 순</option>
+                        <option value="score-asc">점수 낮은 순</option>
+                    </select>
+                </div>
+            </div>
+            <!-- 선택된 심볼 표시 -->
+            <div id="selected-symbol-badge" class="mt-3 hidden">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                    <span id="selected-symbol-text"></span>
+                    <button onclick="clearSymbolFilter()" class="ml-2 text-blue-600 hover:text-blue-800 font-bold">
+                        ×
+                    </button>
+                </span>
+            </div>
+        </div>
+
+        <div class="widget-card" style="cursor: default;">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">최근 신호 (<span id="signal-count">0</span>개)</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onclick="sortTable('time')">
+                                시간 <span id="sort-icon-time" class="sort-icon">⇅</span>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">심볼</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">TF</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">방향</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">진입가</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">손절가</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">TP1</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">TP2</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">결과</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onclick="sortTable('r_multiple')">
+                                R-Multiple <span id="sort-icon-r_multiple" class="sort-icon">⇅</span>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onclick="sortTable('score')">
+                                점수 <span id="sort-icon-score" class="sort-icon">⇅</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="signals-body">
+                        <tr><td colspan="11" class="px-6 py-4 text-center text-gray-500">로딩 중...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM 보고서 모달 -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+            <div class="flex justify-between items-center mb-4 sticky top-0 bg-white z-10 pb-4 border-b">
+                <h2 class="text-2xl font-bold" id="report-modal-title">📊 LLM 트레이딩 보고서</h2>
+                <button onclick="closeReportModal()" class="text-2xl text-gray-500 hover:text-gray-700">&times;</button>
+            </div>
+            
+            <!-- 신호 정보 -->
+            <div id="report-signal-info" class="bg-gray-50 p-4 rounded-lg mb-4">
+                <!-- 동적으로 채워짐 -->
+            </div>
+            
+            <!-- 보고서 내용 -->
+            <div id="report-content" class="report-content">
+                <div class="flex justify-center items-center py-12">
+                    <div class="text-gray-500">로딩 중...</div>
+                </div>
+            </div>
+            
+            <!-- 버튼 -->
+            <div class="mt-6 flex justify-end gap-2 sticky bottom-0 bg-white pt-4 border-t">
+                <button onclick="closeReportModal()" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 작업 실행 모달 -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold" id="task-modal-title">작업 실행</h2>
+                <button onclick="closeTaskModal()" class="text-2xl text-gray-500 hover:text-gray-700">&times;</button>
+            </div>
+            
+            <!-- 프로그레스 바 -->
+            <div class="mb-4">
+                <div class="flex justify-between text-sm text-gray-600 mb-2">
+                    <span id="task-status-text">진행 중...</span>
+                    <span id="task-progress-text">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-4">
+                    <div id="task-progress-bar" class="bg-blue-500 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <!-- 로그 -->
+            <div class="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm h-64 overflow-y-auto" id="task-logs">
+                <div class="text-gray-500">대기 중...</div>
+            </div>
+            
+            <!-- 버튼 -->
+            <div class="mt-4 flex justify-end gap-2">
+                <button onclick="closeTaskModal()" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 위젯 추가 모달 -->
+    <div id="widgetModal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">위젯 추가</h2>
+                <button onclick="closeWidgetModal()" class="text-2xl text-gray-500 hover:text-gray-700">&times;</button>
+            </div>
+            <div id="widget-catalog">
+                <!-- 사용 가능한 위젯 목록 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let activeWidgets = [];
+        let availableWidgets = [];
+        let sortableInstance = null;
+        let widgetSizes = {};  // 위젯 크기 저장 { widget_id: 'small'|'medium'|'large' }
+        
+        // 테이블 관련 변수
+        let currentSignalsData = [];
+        let currentSortColumn = 'time';
+        let currentSortOrder = 'desc';
+        let allSymbols = [];
+        let filteredSymbols = [];
+        let symbolSortOrder = 'asc';
+        let selectedSymbol = '';
+        
+        // 차트 필터링용 심볼
+        let chartFilterSymbol = null;
+        let resultChart = null;
+        let profitChart = null;
+
+        // 로컬 스토리지에서 위젯 설정 로드
+        function loadWidgetConfig() {
+            const saved = localStorage.getItem('dashboard_widgets');
+            if (saved) {
+                activeWidgets = JSON.parse(saved);
+            } else {
+                // 기본 위젯
+                activeWidgets = [
+                    'total_signals',
+                    'win_rate',
+                    'avg_r_multiple',
+                    'total_profit'
+                ];
+            }
+            
+            // 위젯 크기 로드
+            const savedSizes = localStorage.getItem('widget_sizes');
+            if (savedSizes) {
+                widgetSizes = JSON.parse(savedSizes);
+            }
+        }
+
+        // 위젯 설정 저장
+        function saveWidgetConfig() {
+            localStorage.setItem('dashboard_widgets', JSON.stringify(activeWidgets));
+            localStorage.setItem('widget_sizes', JSON.stringify(widgetSizes));
+        }
+        
+        // 가격 포맷 함수 (0 이하는 소수점 5자리, 그 외는 2자리)
+        function formatPrice(price) {
+            if (price === null || price === undefined) return '-';
+            const num = parseFloat(price);
+            if (isNaN(num)) return '-';
+            
+            if (num <= 1) {
+                return num.toFixed(5);
+            } else {
+                return num.toFixed(2);
+            }
+        }
+        
+        // 시간 포맷 함수 (UTC → KST)
+        function formatTimeKST(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            
+            // KST는 UTC+9
+            const kstOffset = 9 * 60; // 분 단위
+            const localOffset = date.getTimezoneOffset(); // 현재 시간대의 오프셋 (분)
+            const kstTime = new Date(date.getTime() + (kstOffset + localOffset) * 60 * 1000);
+            
+            return kstTime.toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+        }
+
+        // 사용 가능한 위젯 목록 로드
+        async function loadAvailableWidgets() {
+            try {
+                const response = await fetch('/api/widgets/available');
+                availableWidgets = await response.json();
+                renderWidgetCatalog();
+            } catch (error) {
+                console.error('위젯 목록 로드 실패:', error);
+            }
+        }
+
+        // 위젯 카탈로그 렌더링
+        function renderWidgetCatalog() {
+            const catalog = document.getElementById('widget-catalog');
+            catalog.innerHTML = '';
+
+            availableWidgets.forEach(widget => {
+                const isActive = activeWidgets.includes(widget.id);
+                const item = document.createElement('div');
+                item.className = 'widget-catalog-item' + (isActive ? ' opacity-50' : '');
+                item.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">${widget.icon}</span>
+                            <div>
+                                <div class="font-semibold text-gray-800">${widget.name}</div>
+                                <div class="text-sm text-gray-500">${widget.id}</div>
+                            </div>
+                        </div>
+                        ${isActive ? 
+                            '<span class="text-sm text-gray-500">이미 추가됨</span>' : 
+                            '<button class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">추가</button>'
+                        }
+                    </div>
+                `;
+
+                if (!isActive) {
+                    item.onclick = () => addWidget(widget.id);
+                }
+
+                catalog.appendChild(item);
+            });
+        }
+
+        // 위젯 추가
+        function addWidget(widgetId) {
+            if (!activeWidgets.includes(widgetId)) {
+                activeWidgets.push(widgetId);
+                saveWidgetConfig();
+                renderWidgets();
+                renderWidgetCatalog();
+                closeWidgetModal();
+            }
+        }
+
+        // 위젯 제거
+        function removeWidget(widgetId) {
+            activeWidgets = activeWidgets.filter(id => id !== widgetId);
+            delete widgetSizes[widgetId];  // 크기 설정도 삭제
+            saveWidgetConfig();
+            renderWidgets();
+            renderWidgetCatalog();
+        }
+        
+        // 위젯 크기 순환 (small → medium → large → small)
+        function cycleWidgetSize(widgetId) {
+            const currentSize = widgetSizes[widgetId] || 'medium';
+            const sizes = ['small', 'medium', 'large'];
+            const currentIndex = sizes.indexOf(currentSize);
+            const nextIndex = (currentIndex + 1) % sizes.length;
+            widgetSizes[widgetId] = sizes[nextIndex];
+            
+            saveWidgetConfig();
+            renderWidgets();
+        }
+
+        // 위젯 렌더링
+        async function renderWidgets() {
+            const container = document.getElementById('widgets-container');
+            container.innerHTML = '';
+
+            if (activeWidgets.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">위젯을 추가해주세요</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/widgets/batch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(activeWidgets)
+                });
+                const widgets = await response.json();
+
+                widgets.forEach(widget => {
+                    if (widget.error) {
+                        console.error(`위젯 로드 실패 (${widget.id}):`, widget.error);
+                        return;
+                    }
+
+                    const card = document.createElement('div');
+                    card.className = 'widget-card';
+                    card.dataset.widgetId = widget.id;
+                    
+                    // 대형 위젯 처리
+                    if (widget.data.buttons && widget.data.buttons.length > 0) {
+                        card.classList.add('col-span-2');
+                    }
+
+                    const data = widget.data;
+                    const colorClass = `color-${widget.color}`;
+                    
+                    // 위젯 크기 적용
+                    const widgetSize = widgetSizes[widget.id] || 'medium';
+                    if (widgetSize === 'large') {
+                        card.classList.add('col-span-2');
+                    } else if (widgetSize === 'small') {
+                        card.style.fontSize = '0.85em';
+                    }
+
+                    // TOP 10 위젯 특별 처리
+                    if (data.widget_type === 'top10') {
+                        card.classList.add('col-span-2');
+                        card.innerHTML = renderTop10Widget(widget);
+                        container.appendChild(card);
+                        return;
+                    }
+                    
+                    // EMA 신호 위젯 특별 처리
+                    if (data.widget_type === 'ema_signals') {
+                        card.classList.add('col-span-2');
+                        card.innerHTML = renderEmaSignalsWidget(widget);
+                        container.appendChild(card);
+                        return;
+                    }
+
+                    let htmlContent = `
+                        <div class="widget-remove" onclick="removeWidget('${widget.id}')">×</div>
+                        <div class="widget-resize" onclick="cycleWidgetSize('${widget.id}')" title="크기 조절">
+                            <span>${widgetSize === 'small' ? 'S' : widgetSize === 'large' ? 'L' : 'M'}</span>
+                        </div>
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="widget-label">${widget.name}</div>
+                                <div class="widget-metric ${colorClass}">
+                                    ${data.value}${data.label || ''}
+                                </div>
+                                ${data.subtitle ? `<div class="text-sm text-gray-500 mt-1">${data.subtitle}</div>` : ''}
+                            </div>
+                            <div class="widget-icon">${widget.icon}</div>
+                        </div>
+                    `;
+                    
+                    // 추가 정보 (데이터 업데이트 위젯용)
+                    if (data.last_signal || data.last_outcome) {
+                        htmlContent += `
+                            <div class="mt-3 pt-3 border-t border-gray-200 text-sm">
+                                ${data.last_signal ? `
+                                    <div class="flex justify-between text-gray-600 mb-1">
+                                        <span>최신 신호:</span>
+                                        <span class="font-mono">${data.last_signal} ${data.signal_ago ? `<span class="text-xs">(${data.signal_ago})</span>` : ''}</span>
+                                    </div>
+                                ` : ''}
+                                ${data.last_outcome ? `
+                                    <div class="flex justify-between text-gray-600">
+                                        <span>최신 결과:</span>
+                                        <span class="font-mono">${data.last_outcome}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }
+                    
+                    // 버튼들 (데이터 업데이트 위젯용)
+                    if (data.buttons && data.buttons.length > 0) {
+                        htmlContent += '<div class="mt-4 grid grid-cols-3 gap-2">';
+                        data.buttons.forEach(btn => {
+                            const btnColorClass = {
+                                'blue': 'bg-blue-500 hover:bg-blue-600',
+                                'green': 'bg-green-500 hover:bg-green-600',
+                                'purple': 'bg-purple-500 hover:bg-purple-600',
+                                'red': 'bg-red-500 hover:bg-red-600'
+                            }[btn.color] || 'bg-gray-500 hover:bg-gray-600';
+                            
+                            htmlContent += `
+                                <button 
+                                    onclick="runTask('${btn.id}', '${btn.label}')" 
+                                    class="${btnColorClass} text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1"
+                                >
+                                    <span>${btn.icon}</span>
+                                    <span>${btn.label}</span>
+                                </button>
+                            `;
+                        });
+                        htmlContent += '</div>';
+                    }
+                    
+                    // 트렌드 표시
+                    if (data.trend && !data.buttons) {
+                        htmlContent += `
+                            <div class="mt-2 text-sm ${data.trend === 'up' ? 'text-green-600' : 'text-red-600'}">
+                                ${data.trend === 'up' ? '↑' : '↓'} ${data.change || ''}
+                            </div>
+                        `;
+                    }
+
+                    card.innerHTML = htmlContent;
+                    container.appendChild(card);
+                });
+
+                // Sortable 재초기화
+                initSortable();
+
+            } catch (error) {
+                console.error('위젯 렌더링 실패:', error);
+            }
+        }
+
+        // TOP 10 위젯 렌더링
+        function renderTop10Widget(widget) {
+            const data = widget.data;
+            const views = data.views;
+            const defaultView = data.default_view || 'tp';
+            const widgetId = widget.id;
+            
+            // 디버깅: 뷰 데이터 확인
+            console.log('TOP 10 위젯 렌더링:', {
+                widgetId,
+                availableViews: Object.keys(views),
+                winrateData: views.winrate ? views.winrate.data.length : 'N/A'
+            });
+            
+            let html = `
+                <div class="widget-remove" onclick="removeWidget('${widgetId}')">×</div>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">${widget.icon}</span>
+                        <span class="text-lg font-semibold text-gray-800">${widget.name}</span>
+                    </div>
+                    <div class="flex gap-1">
+                        <button 
+                            onclick="switchTop10View('${widgetId}', 'tp')" 
+                            class="top10-tab px-3 py-1 rounded text-sm font-medium transition-colors" 
+                            data-view="tp"
+                            data-widget="${widgetId}"
+                        >
+                            TP
+                        </button>
+                        <button 
+                            onclick="switchTop10View('${widgetId}', 'winrate')" 
+                            class="top10-tab px-3 py-1 rounded text-sm font-medium transition-colors" 
+                            data-view="winrate"
+                            data-widget="${widgetId}"
+                        >
+                            Win%
+                        </button>
+                        <button 
+                            onclick="switchTop10View('${widgetId}', 'cumulative')" 
+                            class="top10-tab px-3 py-1 rounded text-sm font-medium transition-colors" 
+                            data-view="cumulative"
+                            data-widget="${widgetId}"
+                        >
+                            누적
+                        </button>
+                        <button 
+                            onclick="switchTop10View('${widgetId}', 'monthly')" 
+                            class="top10-tab px-3 py-1 rounded text-sm font-medium transition-colors" 
+                            data-view="monthly"
+                            data-widget="${widgetId}"
+                        >
+                            월별
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // 각 뷰 컨텐츠
+            Object.keys(views).forEach(viewKey => {
+                const view = views[viewKey];
+                const isActive = viewKey === defaultView;
+                
+                html += `
+                    <div class="top10-view ${isActive ? '' : 'hidden'}" data-view="${viewKey}" data-widget="${widgetId}">
+                        <div class="text-sm font-medium text-gray-600 mb-3">${view.title}</div>
+                `;
+                
+                // 데이터가 없는 경우 처리
+                if (!view.data || view.data.length === 0) {
+                    html += `
+                        <div class="text-center text-gray-500 py-8">
+                            데이터가 없습니다.
+                        </div>
+                    </div>
+                    `;
+                    return;
+                }
+                
+                html += `
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                `;
+                
+                // 헤더
+                view.columns.forEach((col, idx) => {
+                    html += `<th class="px-3 py-2 text-left ${idx === 0 ? 'font-semibold' : 'text-center'}">${col}</th>`;
+                });
+                
+                html += `
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">
+                `;
+                
+                // 데이터 행
+                view.data.forEach((row, idx) => {
+                    html += `<tr class="hover:bg-gray-50">`;
+                    
+                    if (viewKey === 'tp') {
+                        html += `
+                            <td class="px-3 py-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-lg">${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1) + '.'}</span>
+                                    <span class="font-semibold text-blue-600 hover:text-blue-800 cursor-pointer" onclick="filterChartsBySymbol('${row.symbol}')">${row.symbol}</span>
+                                </div>
+                            </td>
+                            <td class="px-3 py-2 text-center font-semibold text-blue-600">${row.tp_count}</td>
+                            <td class="px-3 py-2 text-center text-green-600">${row.tp2_count}</td>
+                            <td class="px-3 py-2 text-center text-blue-500">${row.tp1_count}</td>
+                            <td class="px-3 py-2 text-center">${row.win_rate}%</td>
+                        `;
+                    } else if (viewKey === 'winrate') {
+                        const winRateColor = row.win_rate >= 70 ? 'text-green-600' : row.win_rate >= 50 ? 'text-blue-600' : 'text-orange-600';
+                        html += `
+                            <td class="px-3 py-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-lg">${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1) + '.'}</span>
+                                    <span class="font-semibold text-blue-600 hover:text-blue-800 cursor-pointer" onclick="filterChartsBySymbol('${row.symbol}')">${row.symbol}</span>
+                                </div>
+                            </td>
+                            <td class="px-3 py-2 text-center text-green-600">${row.wins}</td>
+                            <td class="px-3 py-2 text-center text-red-600">${row.losses}</td>
+                            <td class="px-3 py-2 text-center text-gray-600">${row.total_signals}</td>
+                            <td class="px-3 py-2 text-center font-bold ${winRateColor}">${row.win_rate}%</td>
+                            <td class="px-3 py-2 text-center text-gray-600">${row.avg_r}R</td>
+                        `;
+                    } else if (viewKey === 'cumulative') {
+                        const rColor = row.total_r > 0 ? 'text-green-600' : 'text-red-600';
+                        html += `
+                            <td class="px-3 py-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-lg">${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1) + '.'}</span>
+                                    <span class="font-semibold text-blue-600 hover:text-blue-800 cursor-pointer" onclick="filterChartsBySymbol('${row.symbol}')">${row.symbol}</span>
+                                </div>
+                            </td>
+                            <td class="px-3 py-2 text-center font-bold ${rColor}">${row.total_r > 0 ? '+' : ''}${row.total_r}R</td>
+                            <td class="px-3 py-2 text-center text-gray-600">${row.signal_count}</td>
+                            <td class="px-3 py-2 text-center text-gray-600">${row.avg_r}R</td>
+                            <td class="px-3 py-2 text-center text-green-600">${row.wins}</td>
+                        `;
+                    } else if (viewKey === 'monthly') {
+                        const rColor = row.month_r > 0 ? 'text-green-600' : 'text-red-600';
+                        html += `
+                            <td class="px-3 py-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-lg">${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1) + '.'}</span>
+                                    <span class="font-semibold text-blue-600 hover:text-blue-800 cursor-pointer" onclick="filterChartsBySymbol('${row.symbol}')">${row.symbol}</span>
+                                </div>
+                            </td>
+                            <td class="px-3 py-2 text-center font-bold ${rColor}">${row.month_r > 0 ? '+' : ''}${row.month_r}R</td>
+                            <td class="px-3 py-2 text-center text-gray-600">${row.signal_count}</td>
+                            <td class="px-3 py-2 text-center text-gray-600">${row.avg_r}R</td>
+                            <td class="px-3 py-2 text-center text-green-600">${row.wins}</td>
+                        `;
+                    }
+                    
+                    html += `</tr>`;
+                });
+                
+                html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // 초기 탭 활성화
+            setTimeout(() => {
+                const activeTab = document.querySelector(`.top10-tab[data-widget="${widgetId}"][data-view="${defaultView}"]`);
+                if (activeTab) {
+                    activeTab.classList.add('bg-yellow-500', 'text-white');
+                    activeTab.classList.remove('bg-gray-100', 'text-gray-700');
+                }
+            }, 0);
+            
+            return html;
+        }
+        
+        // EMA 신호 위젯 렌더링
+        function renderEmaSignalsWidget(widget) {
+            const data = widget.data;
+            const signals = data.signals || [];
+            const widgetId = widget.id;
+            const scannerStatus = data.scanner_status;
+            
+            // 데이터 전역 저장 (script 태그 대신)
+            window.emaSignalsData = window.emaSignalsData || {};
+            window.emaSignalsData[widgetId] = signals;
+            window.emaSignalsPage = window.emaSignalsPage || {};
+            window.emaSignalsPage[widgetId] = 0;
+            
+            let html = `
+                <div class="widget-remove" onclick="removeWidget('${widgetId}')">×</div>
+                
+                <!-- 헤더: 제목 + 스캐너 상태 -->
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">${widget.icon}</span>
+                        <span class="text-lg font-semibold text-gray-800">${widget.name}</span>
+                    </div>
+            `;
+            
+            // 스캐너 상태 표시
+            if (scannerStatus) {
+                const statusColor = scannerStatus.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+                const statusIcon = scannerStatus.is_active ? '✅' : '⏸️';
+                const timeAgo = scannerStatus.time_ago_sec < 60 ? 
+                    `${scannerStatus.time_ago_sec}초 전` : 
+                    `${Math.floor(scannerStatus.time_ago_sec / 60)}분 전`;
+                
+                html += `
+                    <div class="text-xs ${statusColor} px-2 py-1 rounded">
+                        ${statusIcon} ${scannerStatus.timeframe} | ${timeAgo}
+                    </div>
+                `;
+            }
+            
+            html += `
+                </div>
+            `;
+            
+            // 스캔 통계 표시 (있으면)
+            if (scannerStatus) {
+                html += `
+                    <div class="mb-3 text-xs text-gray-600 flex gap-3">
+                        <span>심볼: ${scannerStatus.total_symbols}</span>
+                        <span>신호: ${scannerStatus.signals_fired}</span>
+                        <span>크로스: ${scannerStatus.cross_detected}</span>
+                        <span>소요: ${scannerStatus.scan_duration}초</span>
+                    </div>
+                `;
+            }
+            
+            html += `
+                <!-- 페이징 -->
+                <div class="flex items-center justify-center gap-2 mb-3">
+                    <button onclick="emaSignalPrev('${widgetId}')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">
+                        ◀
+                    </button>
+                    <span id="ema-page-${widgetId}" class="text-sm text-gray-600 min-w-[30px] text-center">1</span>
+                    <button onclick="emaSignalNext('${widgetId}')" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">
+                        ▶
+                    </button>
+                </div>
+            `;
+            
+            if (signals.length === 0) {
+                html += `
+                    <div class="text-center text-gray-500 py-8">
+                        No signals yet
+                    </div>
+                `;
+            } else {
+                html += `<div id="ema-signals-container-${widgetId}" class="space-y-3">`;
+                
+                // 첫 5개만 표시 (페이징)
+                const pageSignals = signals.slice(0, 5);
+                pageSignals.forEach((signal, idx) => {
+                    const directionColor = signal.direction === 'GOLDEN' ? 'text-green-600' : 'text-red-600';
+                    const directionIcon = signal.direction === 'GOLDEN' ? '📈' : '📉';
+                    const directionText = signal.direction === 'GOLDEN' ? 'GOLDEN' : 'DEAD';
+                    
+                    const probColor = signal.prob_color === 'green' ? 'text-green-600' : 
+                                     signal.prob_color === 'orange' ? 'text-orange-600' : 'text-red-600';
+                    
+                    // 안전한 값 처리
+                    const entry = signal.entry || 0;
+                    const sl = signal.sl || 0;
+                    const tp1 = signal.tp1 || 0;
+                    
+                    html += `
+                        <div class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                             onclick="window.open('${signal.tv_link}', '_blank')"
+                             data-signal-idx="${idx}">
+                            <div class="flex items-start justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xl">${directionIcon}</span>
+                                    <div>
+                                        <div class="font-semibold text-gray-800">${signal.symbol}</div>
+                                        <div class="text-xs text-gray-500">${signal.timeframe} | ${signal.signal_time}</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-bold ${directionColor}">${directionText}</div>
+                                    ${signal.prob_value ? `<div class="text-xs ${probColor}">${signal.prob_value}%</div>` : ''}
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-3 gap-2 text-xs">
+                                <div>
+                                    <div class="text-gray-500">Entry</div>
+                                    <div class="font-mono">${formatPrice(entry)}</div>
+                                </div>
+                                <div>
+                                    <div class="text-gray-500">SL</div>
+                                    <div class="font-mono text-red-600">${formatPrice(sl)}</div>
+                                </div>
+                                <div>
+                                    <div class="text-gray-500">TP1</div>
+                                    <div class="font-mono text-green-600">${formatPrice(tp1)}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-2 text-xs text-gray-400 flex items-center gap-1">
+                                <span>🔗</span>
+                                <span>Click to open TradingView</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
+            }
+            
+            return html;
+        }
+        
+        // EMA 신호 페이징
+        function emaSignalNext(widgetId) {
+            const data = window.emaSignalsData ? window.emaSignalsData[widgetId] : null;
+            if (!data || data.length === 0) return;
+            
+            const currentPage = window.emaSignalsPage[widgetId] || 0;
+            const maxPage = Math.floor((data.length - 1) / 5);
+            
+            if (currentPage >= maxPage) return;
+            
+            window.emaSignalsPage[widgetId] = currentPage + 1;
+            updateEmaSignalsDisplay(widgetId);
+        }
+        
+        function emaSignalPrev(widgetId) {
+            const currentPage = window.emaSignalsPage ? window.emaSignalsPage[widgetId] : 0;
+            
+            if (currentPage <= 0) return;
+            
+            window.emaSignalsPage[widgetId] = currentPage - 1;
+            updateEmaSignalsDisplay(widgetId);
+        }
+        
+        function updateEmaSignalsDisplay(widgetId) {
+            const data = window.emaSignalsData ? window.emaSignalsData[widgetId] : null;
+            if (!data) return;
+            
+            const page = window.emaSignalsPage ? window.emaSignalsPage[widgetId] || 0 : 0;
+            
+            const start = page * 5;
+            const end = start + 5;
+            const pageSignals = data.slice(start, end);
+            
+            const container = document.getElementById(`ema-signals-container-${widgetId}`);
+            const pageDisplay = document.getElementById(`ema-page-${widgetId}`);
+            
+            if (!container || !pageDisplay) {
+                console.error('EMA signals container or page display not found');
+                return;
+            }
+            
+            // 페이지 번호 업데이트
+            pageDisplay.textContent = page + 1;
+            
+            // 신호 카드 재렌더링
+            let html = '';
+            pageSignals.forEach((signal, idx) => {
+                const directionColor = signal.direction === 'GOLDEN' ? 'text-green-600' : 'text-red-600';
+                const directionIcon = signal.direction === 'GOLDEN' ? '📈' : '📉';
+                const directionText = signal.direction === 'GOLDEN' ? 'GOLDEN' : 'DEAD';
+                
+                const probColor = signal.prob_color === 'green' ? 'text-green-600' : 
+                                 signal.prob_color === 'orange' ? 'text-orange-600' : 'text-red-600';
+                
+                // 안전한 값 처리
+                const entry = signal.entry || 0;
+                const sl = signal.sl || 0;
+                const tp1 = signal.tp1 || 0;
+                
+                html += `
+                    <div class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                         onclick="window.open('${signal.tv_link}', '_blank')"
+                         data-signal-idx="${idx}">
+                        <div class="flex items-start justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl">${directionIcon}</span>
+                                <div>
+                                    <div class="font-semibold text-gray-800">${signal.symbol}</div>
+                                    <div class="text-xs text-gray-500">${signal.timeframe} | ${signal.signal_time}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="font-bold ${directionColor}">${directionText}</div>
+                                ${signal.prob_value ? `<div class="text-xs ${probColor}">${signal.prob_value}%</div>` : ''}
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <div>
+                                <div class="text-gray-500">Entry</div>
+                                <div class="font-mono">${formatPrice(entry)}</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-500">SL</div>
+                                <div class="font-mono text-red-600">${formatPrice(sl)}</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-500">TP1</div>
+                                <div class="font-mono text-green-600">${formatPrice(tp1)}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-2 text-xs text-gray-400 flex items-center gap-1">
+                            <span>🔗</span>
+                            <span>Click to open TradingView</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // EMA 스캐너 상태 확인
+
+        // TOP 10 뷰 전환
+        function switchTop10View(widgetId, viewKey) {
+            console.log('TOP 10 뷰 전환:', { widgetId, viewKey });
+            
+            // 모든 뷰 숨기기
+            const allViews = document.querySelectorAll(`.top10-view[data-widget="${widgetId}"]`);
+            console.log('전체 뷰 수:', allViews.length);
+            allViews.forEach(el => {
+                el.classList.add('hidden');
+            });
+            
+            // 선택된 뷰 표시
+            const targetView = document.querySelector(`.top10-view[data-widget="${widgetId}"][data-view="${viewKey}"]`);
+            console.log('대상 뷰 찾음:', !!targetView);
+            if (targetView) {
+                targetView.classList.remove('hidden');
+            } else {
+                console.error('뷰를 찾을 수 없음:', viewKey);
+            }
+            
+            // 탭 스타일 업데이트
+            document.querySelectorAll(`.top10-tab[data-widget="${widgetId}"]`).forEach(tab => {
+                tab.classList.remove('bg-yellow-500', 'text-white');
+                tab.classList.add('bg-gray-100', 'text-gray-700');
+            });
+            
+            const activeTab = document.querySelector(`.top10-tab[data-widget="${widgetId}"][data-view="${viewKey}"]`);
+            if (activeTab) {
+                activeTab.classList.add('bg-yellow-500', 'text-white');
+                activeTab.classList.remove('bg-gray-100', 'text-gray-700');
+            }
+        }
+
+        // 드래그 앤 드롭 초기화
+        function initSortable() {
+            const container = document.getElementById('widgets-container');
+            if (sortableInstance) {
+                sortableInstance.destroy();
+            }
+
+            sortableInstance = Sortable.create(container, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: function(evt) {
+                    // 순서 변경 저장
+                    const newOrder = [];
+                    container.querySelectorAll('.widget-card').forEach(card => {
+                        newOrder.push(card.dataset.widgetId);
+                    });
+                    activeWidgets = newOrder;
+                    saveWidgetConfig();
+                }
+            });
+        }
+
+        // 모달 열기/닫기
+        function openWidgetModal() {
+            document.getElementById('widgetModal').style.display = 'block';
+        }
+
+        function closeWidgetModal() {
+            document.getElementById('widgetModal').style.display = 'none';
+        }
+
+        // 차트 및 테이블 로드 (기존 코드 유지)
+        async function loadCharts() {
+            // 기존 차트 파괴
+            if (resultChart) resultChart.destroy();
+            if (profitChart) profitChart.destroy();
+            
+            // 결과 분포 차트
+            let distUrl = '/api/result-distribution';
+            if (chartFilterSymbol) {
+                distUrl += `?symbol=${chartFilterSymbol}`;
+            }
+            const distResponse = await fetch(distUrl);
+            const distData = await distResponse.json();
+            
+            resultChart = new Chart(document.getElementById('resultChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: distData.labels,
+                    datasets: [{
+                        data: distData.values,
+                        backgroundColor: ['#10B981', '#3B82F6', '#EF4444', '#9CA3AF']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        title: {
+                            display: !!chartFilterSymbol,
+                            text: chartFilterSymbol ? `${chartFilterSymbol} - 결과 분포` : ''
+                        }
+                    }
+                }
+            });
+
+            // 일별 수익 차트
+            let profitUrl = '/api/daily-profit?days=30';
+            if (chartFilterSymbol) {
+                profitUrl += `&symbol=${chartFilterSymbol}`;
+            }
+            const profitResponse = await fetch(profitUrl);
+            const profitData = await profitResponse.json();
+            
+            profitChart = new Chart(document.getElementById('profitChart'), {
+                type: 'line',
+                data: {
+                    labels: profitData.dates,
+                    datasets: [{
+                        label: chartFilterSymbol ? `${chartFilterSymbol} 누적 수익` : '누적 수익',
+                        data: profitData.cumulative_profit,
+                        borderColor: '#8B5CF6',
+                        fill: true,
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { 
+                        legend: { display: true },
+                        title: {
+                            display: !!chartFilterSymbol,
+                            text: chartFilterSymbol ? `${chartFilterSymbol} - 일별 수익` : ''
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 심볼로 차트 필터링
+        async function filterChartsBySymbol(symbol) {
+            if (chartFilterSymbol === symbol) {
+                // 같은 심볼 클릭 시 필터 해제
+                chartFilterSymbol = null;
+                console.log('차트 필터 해제');
+            } else {
+                chartFilterSymbol = symbol;
+                console.log('차트 필터 적용:', symbol);
+            }
+            
+            // 차트 다시 로드
+            await loadCharts();
+            
+            // 신호 테이블도 필터링
+            selectSymbolFromTable(symbol);
+        }
+
+        async function loadSignals() {
+            try {
+                const limitFilter = document.getElementById('limit-filter');
+                if (!limitFilter) {
+                    console.error('limit-filter 요소를 찾을 수 없습니다.');
+                    return;
+                }
+                
+                const limit = limitFilter.value;
+                let url = `/api/recent-signals?limit=${limit}`;
+                
+                if (selectedSymbol) {
+                    url += `&symbol=${selectedSymbol}`;
+                }
+                
+                console.log('신호 로딩 시작:', url);
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const signals = await response.json();
+                
+                console.log('신호 데이터 수신:', signals.length, '개');
+                if (signals.length > 0) {
+                    console.log('첫 번째 신호 샘플:', signals[0]);
+                }
+                
+                // signal_id가 없는 데이터 확인
+                const missingIds = signals.filter(s => !s.signal_id);
+                if (missingIds.length > 0) {
+                    console.warn('signal_id가 없는 신호:', missingIds.length, '개');
+                    console.warn('샘플:', missingIds[0]);
+                }
+                
+                currentSignalsData = signals;
+                
+                const signalCountEl = document.getElementById('signal-count');
+                if (signalCountEl) {
+                    signalCountEl.textContent = signals.length;
+                }
+                
+                sortAndDisplaySignals();
+                
+                console.log('신호 테이블 렌더링 완료');
+            } catch (error) {
+                console.error('신호 로드 오류:', error);
+                console.error('Error stack:', error.stack);
+                const tbody = document.getElementById('signals-body');
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="11" class="px-6 py-4 text-center text-red-500">데이터 로드 실패: ' + error.message + '</td></tr>';
+                }
+            }
+        }
+        
+        // 정렬 및 표시
+        function sortAndDisplaySignals() {
+            if (currentSignalsData.length === 0) {
+                document.getElementById('signals-body').innerHTML = 
+                    '<tr><td colspan="11" class="px-6 py-4 text-center text-gray-500">신호가 없습니다.</td></tr>';
+                return;
+            }
+
+            const sortedData = [...currentSignalsData].sort((a, b) => {
+                let valA, valB;
+
+                switch(currentSortColumn) {
+                    case 'time':
+                        valA = new Date(a.open_time).getTime();
+                        valB = new Date(b.open_time).getTime();
+                        break;
+                    case 'r_multiple':
+                        valA = a.r_multiple !== null ? a.r_multiple : -999;
+                        valB = b.r_multiple !== null ? b.r_multiple : -999;
+                        break;
+                    case 'score':
+                        valA = a.score !== null ? a.score : -999;
+                        valB = b.score !== null ? b.score : -999;
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (currentSortOrder === 'asc') {
+                    return valA - valB;
+                } else {
+                    return valB - valA;
+                }
+            });
+
+            displaySignalsTable(sortedData);
+            updateSortIcons();
+        }
+        
+        // 테이블 표시
+        function displaySignalsTable(signals) {
+            const tbody = document.getElementById('signals-body');
+            tbody.innerHTML = '';
+            
+            const resultColors = {
+                'tp2': 'text-green-600 font-semibold',
+                'tp1': 'text-blue-600 font-medium',
+                'sl': 'text-red-600 font-medium',
+                'none': 'text-gray-500'
+            };
+            
+            const resultEmojis = {
+                'tp2': '✓✓',
+                'tp1': '✓',
+                'sl': '✗',
+                'none': '○'
+            };
+            
+            signals.forEach(s => {
+                const row = tbody.insertRow();
+                const rMultipleColor = s.r_multiple > 0 ? 'text-green-600 font-semibold' : 
+                                      s.r_multiple < 0 ? 'text-red-600 font-semibold' : 
+                                      'text-gray-500';
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 text-sm whitespace-nowrap">
+                        <div class="flex items-center gap-2">
+                            <span>${formatTimeKST(s.open_time)}</span>
+                            ${s.signal_id ? `
+                                <button 
+                                    class="report-btn text-blue-600 hover:text-blue-800 transition-colors text-lg" 
+                                    data-signal-id="${s.signal_id}"
+                                    title="LLM 보고서 보기"
+                                >
+                                    📊
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm font-semibold whitespace-nowrap text-blue-600 hover:text-blue-800 cursor-pointer" onclick="selectSymbolFromTable('${s.symbol}')">${s.symbol}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap">${s.tf || '-'}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap">
+                        <span class="badge ${s.direction === 'long' ? 'badge-long' : 'badge-short'}">
+                            ${s.direction ? s.direction.toUpperCase() : '-'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap font-mono">${formatPrice(s.entry)}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap font-mono text-red-600">${formatPrice(s.stop_loss)}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap font-mono text-blue-600">${formatPrice(s.take_profit_1)}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap font-mono text-green-600">${formatPrice(s.take_profit_2)}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap ${resultColors[s.result] || ''}">
+                        ${resultEmojis[s.result] || ''} ${s.result ? s.result.toUpperCase() : '-'}
+                    </td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap ${rMultipleColor} font-mono">${s.r_multiple !== null ? s.r_multiple.toFixed(2) + 'R' : '-'}</td>
+                    <td class="px-6 py-4 text-sm whitespace-nowrap">${s.score || '-'}</td>
+                `;
+                
+                // 보고서 버튼에 이벤트 리스너 추가
+                const reportBtn = row.querySelector('.report-btn');
+                if (reportBtn) {
+                    reportBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const signalId = this.getAttribute('data-signal-id');
+                        console.log('보고서 버튼 클릭됨, signal_id:', signalId, 'type:', typeof signalId);
+                        
+                        // signal_id 유효성 검사
+                        if (!signalId || signalId === 'null' || signalId === 'undefined' || signalId === '0') {
+                            console.error('유효하지 않은 signal_id:', signalId);
+                            alert('신호 ID를 찾을 수 없습니다.');
+                            return;
+                        }
+                        
+                        // UUID 형식 검사 (간단한 패턴)
+                        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                        if (!uuidPattern.test(signalId)) {
+                            console.error('UUID 형식이 아님:', signalId);
+                            alert('유효하지 않은 신호 ID 형식입니다.');
+                            return;
+                        }
+                        
+                        console.log('showReport 호출, signal_id:', signalId);
+                        showReport(signalId);
+                    });
+                }
+            });
+        }
+        
+        // 정렬 함수
+        function sortTable(column) {
+            if (currentSortColumn === column) {
+                currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                currentSortOrder = 'desc';
+            }
+            sortAndDisplaySignals();
+        }
+        
+        function handleSortChange() {
+            const sortSelect = document.getElementById('sort-select');
+            const [column, order] = sortSelect.value.split('-');
+            currentSortColumn = column;
+            currentSortOrder = order;
+            sortAndDisplaySignals();
+        }
+        
+        function updateSortIcons() {
+            ['time', 'r_multiple', 'score'].forEach(col => {
+                const icon = document.getElementById(`sort-icon-${col}`);
+                if (icon) {
+                    icon.className = 'sort-icon';
+                    icon.textContent = '⇅';
+                }
+            });
+
+            const activeIcon = document.getElementById(`sort-icon-${currentSortColumn}`);
+            if (activeIcon) {
+                activeIcon.className = 'sort-icon active';
+                activeIcon.textContent = currentSortOrder === 'asc' ? '↑' : '↓';
+            }
+
+            const sortSelect = document.getElementById('sort-select');
+            if (sortSelect) {
+                sortSelect.value = `${currentSortColumn}-${currentSortOrder}`;
+            }
+        }
+        
+        // 심볼 관리
+        async function loadSymbolList() {
+            try {
+                const response = await fetch('/api/symbols');
+                const symbols = await response.json();
+                allSymbols = symbols;
+                filteredSymbols = [...symbols];
+                displaySymbolList();
+            } catch (error) {
+                console.error('심볼 목록 로드 실패:', error);
+            }
+        }
+        
+        function displaySymbolList() {
+            const symbolList = document.getElementById('symbol-list');
+            symbolList.innerHTML = '';
+            
+            const sorted = [...filteredSymbols].sort((a, b) => {
+                if (symbolSortOrder === 'asc') {
+                    return a.localeCompare(b);
+                } else {
+                    return b.localeCompare(a);
+                }
+            });
+            
+            sorted.forEach(symbol => {
+                const item = document.createElement('div');
+                item.className = 'symbol-item';
+                if (symbol === selectedSymbol) {
+                    item.classList.add('selected');
+                }
+                item.textContent = symbol;
+                item.onclick = () => selectSymbol(symbol);
+                symbolList.appendChild(item);
+            });
+            
+            if (sorted.length === 0) {
+                symbolList.innerHTML = '<div class="px-4 py-3 text-sm text-gray-500 text-center">검색 결과 없음</div>';
+            }
+        }
+        
+        function toggleSymbolDropdown() {
+            const dropdown = document.getElementById('symbol-dropdown');
+            dropdown.classList.toggle('hidden');
+            if (!dropdown.classList.contains('hidden')) {
+                document.getElementById('symbol-search').focus();
+            }
+        }
+        
+        function selectSymbol(symbol) {
+            selectedSymbol = symbol;
+            document.getElementById('symbol-search').value = symbol;
+            
+            const badge = document.getElementById('selected-symbol-badge');
+            const badgeText = document.getElementById('selected-symbol-text');
+            badgeText.textContent = symbol;
+            badge.classList.remove('hidden');
+            
+            document.getElementById('symbol-dropdown').classList.add('hidden');
+            loadSignals();
+            displaySymbolList();
+        }
+        
+        function selectSymbolFromTable(symbol) {
+            selectSymbol(symbol);
+            // 차트도 필터링
+            chartFilterSymbol = symbol;
+            loadCharts();
+        }
+        
+        function clearSymbolFilter() {
+            selectedSymbol = '';
+            chartFilterSymbol = null;
+            document.getElementById('symbol-search').value = '';
+            document.getElementById('selected-symbol-badge').classList.add('hidden');
+            filteredSymbols = [...allSymbols];
+            displaySymbolList();
+            loadSignals();
+            loadCharts();  // 차트도 초기화
+        }
+        
+        function selectAllSymbols() {
+            clearSymbolFilter();
+        }
+        
+        function toggleSymbolSort() {
+            symbolSortOrder = symbolSortOrder === 'asc' ? 'desc' : 'asc';
+            const btn = document.getElementById('symbol-sort-btn');
+            btn.textContent = symbolSortOrder === 'asc' ? 'A→Z' : 'Z→A';
+            displaySymbolList();
+        }
+        
+        function searchSymbols(query) {
+            if (!query) {
+                filteredSymbols = [...allSymbols];
+            } else {
+                const lowerQuery = query.toLowerCase();
+                filteredSymbols = allSymbols.filter(symbol => 
+                    symbol.toLowerCase().includes(lowerQuery)
+                );
+            }
+            displaySymbolList();
+        }
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('=== 페이지 로드 시작 ===');
+            
+            // 심볼 검색 이벤트
+            const searchInput = document.getElementById('symbol-search');
+            searchInput.addEventListener('input', (e) => {
+                searchSymbols(e.target.value);
+            });
+            searchInput.addEventListener('focus', () => {
+                document.getElementById('symbol-dropdown').classList.remove('hidden');
+            });
+            searchInput.addEventListener('click', () => {
+                searchInput.select();
+            });
+            
+            // 필터 변경 이벤트
+            document.getElementById('limit-filter').addEventListener('change', loadSignals);
+            
+            // 외부 클릭 시 드롭다운 닫기
+            document.addEventListener('click', (event) => {
+                const dropdown = document.getElementById('symbol-dropdown');
+                const searchInput = document.getElementById('symbol-search');
+                const dropdownBtn = document.getElementById('symbol-dropdown-btn');
+                
+                if (!dropdown.contains(event.target) && 
+                    event.target !== searchInput && 
+                    event.target !== dropdownBtn) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+            
+            console.log('1. 위젯 설정 로드...');
+            loadWidgetConfig();
+            
+            console.log('2. 사용 가능한 위젯 로드...');
+            await loadAvailableWidgets();
+            
+            console.log('3. 심볼 목록 로드...');
+            await loadSymbolList();
+            
+            console.log('4. 위젯 렌더링...');
+            await renderWidgets();
+            
+            console.log('5. 차트 로드...');
+            await loadCharts();
+            
+            console.log('6. 신호 테이블 로드...');
+            await loadSignals();
+            
+            console.log('=== 페이지 로드 완료 ===');
+
+            // 자동 새로고침 인터벌 변수
+            let widgetRefreshInterval = null;
+            let signalRefreshInterval = null;
+
+            // 자동 새로고침 시작 함수
+            function startAutoRefresh() {
+                // 기존 인터벌 제거
+                if (widgetRefreshInterval) clearInterval(widgetRefreshInterval);
+                if (signalRefreshInterval) clearInterval(signalRefreshInterval);
+
+                // 30초마다 위젯 데이터 갱신
+                widgetRefreshInterval = setInterval(renderWidgets, 30000);
+                // 30초마다 신호 데이터 갱신
+                signalRefreshInterval = setInterval(loadSignals, 30000);
+                
+                console.log('자동 새로고침 시작 (30초 간격)');
+            }
+
+            // 자동 새로고침 중지 함수
+            function stopAutoRefresh() {
+                if (widgetRefreshInterval) {
+                    clearInterval(widgetRefreshInterval);
+                    widgetRefreshInterval = null;
+                }
+                if (signalRefreshInterval) {
+                    clearInterval(signalRefreshInterval);
+                    signalRefreshInterval = null;
+                }
+                console.log('자동 새로고침 중지');
+            }
+
+            // 토글 스위치 이벤트
+            const autoRefreshToggle = document.getElementById('autoRefreshToggle');
+            const refreshStatus = document.getElementById('refreshStatus');
+
+            autoRefreshToggle.addEventListener('change', function() {
+                if (this.checked) {
+                    startAutoRefresh();
+                    refreshStatus.textContent = 'ON (30초)';
+                    refreshStatus.className = 'text-xs text-green-600';
+                } else {
+                    stopAutoRefresh();
+                    refreshStatus.textContent = 'OFF';
+                    refreshStatus.className = 'text-xs text-red-600';
+                }
+            });
+
+            // 초기 자동 새로고침 시작 (체크박스가 기본적으로 체크되어 있으므로)
+            startAutoRefresh();
+        });
+
+        // 모달 외부 클릭 시 닫기
+        window.onclick = function(event) {
+            const modal = document.getElementById('widgetModal');
+            if (event.target == modal) {
+                closeWidgetModal();
+            }
+            const taskModal = document.getElementById('taskModal');
+            if (event.target == taskModal) {
+                closeTaskModal();
+            }
+            const reportModal = document.getElementById('reportModal');
+            if (event.target == reportModal) {
+                closeReportModal();
+            }
+        }
+        
+        // LLM 보고서 관련 함수들
+        async function showReport(signalId) {
+            console.log('showReport 호출됨, signal_id:', signalId);
+            
+            const modal = document.getElementById('reportModal');
+            const content = document.getElementById('report-content');
+            const signalInfo = document.getElementById('report-signal-info');
+            
+            if (!modal) {
+                console.error('reportModal 요소를 찾을 수 없습니다');
+                alert('오류: 모달을 찾을 수 없습니다. 페이지를 새로고침하세요.');
+                return;
+            }
+            
+            // 모달 열기
+            modal.style.display = 'block';
+            console.log('모달 열림');
+            
+            // 로딩 표시
+            content.innerHTML = `
+                <div class="flex justify-center items-center py-12">
+                    <div class="text-gray-500">보고서를 불러오는 중...</div>
+                </div>
+            `;
+            signalInfo.innerHTML = '';
+            
+            try {
+                console.log('API 요청 시작:', `/api/llm-report/${signalId}`);
+                const response = await fetch(`/api/llm-report/${signalId}`);
+                console.log('API 응답 상태:', response.status);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('이 신호에 대한 보고서가 아직 생성되지 않았습니다.');
+                    }
+                    const errorText = await response.text();
+                    console.error('API 오류 응답:', errorText);
+                    throw new Error('보고서를 불러올 수 없습니다.');
+                }
+                
+                const data = await response.json();
+                console.log('보고서 데이터 수신:', data);
+                displayReport(data);
+                
+            } catch (error) {
+                console.error('보고서 로드 오류:', error);
+                content.innerHTML = `
+                    <div class="text-center py-12">
+                        <div class="text-red-600 mb-4 text-xl">⚠️ ${error.message}</div>
+                        <div class="text-sm text-gray-500 mb-4">
+                            보고서를 생성하려면 "📄 보고서 생성" 버튼을 클릭하세요.
+                        </div>
+                        <button 
+                            onclick="closeReportModal()" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                            확인
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        function displayReport(data) {
+            const signalInfo = document.getElementById('report-signal-info');
+            const content = document.getElementById('report-content');
+            const signal = data.signal;
+            
+            // 신호 정보 표시
+            const directionBadge = signal.direction === 'long' 
+                ? '<span class="badge badge-long">LONG</span>' 
+                : '<span class="badge badge-short">SHORT</span>';
+            
+            signalInfo.innerHTML = `
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">심볼</div>
+                        <div class="font-bold text-lg">${signal.symbol}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">타임프레임</div>
+                        <div class="font-semibold">${signal.tf || '-'}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">방향</div>
+                        <div>${directionBadge}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">점수</div>
+                        <div class="font-semibold">${signal.score || '-'}</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 pt-3 border-t">
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">진입가</div>
+                        <div class="font-mono text-sm">${signal.entry ? signal.entry.toFixed(4) : '-'}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">TP1</div>
+                        <div class="font-mono text-sm text-green-600">${signal.tp1 ? signal.tp1.toFixed(4) : '-'}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">TP2</div>
+                        <div class="font-mono text-sm text-green-600">${signal.tp2 ? signal.tp2.toFixed(4) : '-'}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-500 mb-1">SL</div>
+                        <div class="font-mono text-sm text-red-600">${signal.sl ? signal.sl.toFixed(4) : '-'}</div>
+                    </div>
+                </div>
+            `;
+            
+            // 보고서 내용 표시
+            if (data.report_text) {
+                // Markdown 스타일 렌더링 (개선된 버전)
+                let html = data.report_text;
+                
+                // # 제목 (h1)
+                html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+                
+                // ## 제목 (h2)
+                html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+                
+                // ### 제목 (h3)
+                html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+                
+                // **굵게**
+                html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                
+                // *이탤릭*
+                html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+                
+                // `코드`
+                html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+                
+                // 리스트 처리 (개선)
+                html = html.replace(/^- (.*)$/gim, '<li>$1</li>');
+                
+                // 연속된 <li>를 <ul>로 감싸기
+                html = html.replace(/(<li>.*<\/li>\n?)+/g, function(match) {
+                    return '<ul>' + match + '</ul>';
+                });
+                
+                // 단락 처리: 이중 줄바꿈 → </p><p>
+                html = html.replace(/\n\n+/g, '</p><p>');
+                
+                // 단일 줄바꿈 → <br>
+                html = html.replace(/\n/g, '<br>');
+                
+                // 전체를 <p>로 감싸기
+                if (!html.startsWith('<h1>') && !html.startsWith('<h2>')) {
+                    html = '<p>' + html + '</p>';
+                }
+                
+                content.innerHTML = `
+                    <div class="bg-white p-6 rounded-lg">
+                        ${html}
+                    </div>
+                    <div class="mt-4 text-xs text-gray-500 text-right">
+                        생성 시간: ${data.created_at ? new Date(data.created_at).toLocaleString('ko-KR') : '-'}
+                    </div>
+                `;
+            } else if (data.response_json) {
+                // JSON 형식으로 표시
+                content.innerHTML = `
+                    <div class="bg-gray-50 p-6 rounded-lg">
+                        <pre class="text-sm overflow-x-auto">${JSON.stringify(data.response_json, null, 2)}</pre>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `
+                    <div class="text-center py-12 text-gray-500">
+                        보고서 내용이 없습니다.
+                    </div>
+                `;
+            }
+        }
+        
+        function closeReportModal() {
+            document.getElementById('reportModal').style.display = 'none';
+        }
+        
+        // 작업 실행 관련 함수들
+        let currentTaskId = null;
+        let taskStatusInterval = null;
+        
+        async function runTask(taskId, taskName) {
+            openTaskModal(taskName);
+            
+            try {
+                let endpoint = '';
+                if (taskId === 'run_pipeline') {
+                    endpoint = '/api/tasks/run-pipeline';
+                } else if (taskId === 'run_outcomes') {
+                    endpoint = '/api/tasks/run-outcomes';
+                } else if (taskId === 'generate_report') {
+                    endpoint = '/api/tasks/generate-report';
+                } else {
+                    console.error('알 수 없는 작업:', taskId);
+                    appendTaskLog('✗ 알 수 없는 작업: ' + taskId);
+                    return;
+                }
+                
+                console.log('작업 실행:', taskId, '→', endpoint);
+                
+                const response = await fetch(endpoint, { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('작업 시작됨:', data);
+                
+                currentTaskId = data.task_id;
+                
+                // 상태 폴링 시작
+                taskStatusInterval = setInterval(checkTaskStatus, 1000);
+                
+            } catch (error) {
+                console.error('작업 실행 오류:', error);
+                updateTaskLogs(['✗ 작업 실행 실패: ' + error.message]);
+                updateTaskProgress(0, 'failed');
+            }
+        }
+        
+        async function checkTaskStatus() {
+            if (!currentTaskId) return;
+            
+            try {
+                const response = await fetch(`/api/tasks/${currentTaskId}/status`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('작업 상태:', data);
+                
+                // 프로그레스 바 업데이트
+                updateTaskProgress(data.progress, data.status);
+                
+                // 로그 업데이트
+                updateTaskLogs(data.logs);
+                
+                // 완료 또는 실패 시 폴링 중지
+                if (data.status === 'completed' || data.status === 'failed') {
+                    clearInterval(taskStatusInterval);
+                    taskStatusInterval = null;
+                    
+                    // 위젯 데이터 새로고침
+                    setTimeout(() => {
+                        renderWidgets();
+                        loadSignals();
+                    }, 1000);
+                }
+                
+            } catch (error) {
+                console.error('상태 확인 오류:', error);
+                updateTaskLogs([...document.getElementById('task-logs').textContent.split('\n'), '✗ 상태 확인 실패: ' + error.message]);
+                clearInterval(taskStatusInterval);
+                taskStatusInterval = null;
+            }
+        }
+        
+        function openTaskModal(taskName) {
+            document.getElementById('task-modal-title').textContent = taskName;
+            document.getElementById('taskModal').style.display = 'block';
+            document.getElementById('task-progress-bar').style.width = '0%';
+            document.getElementById('task-progress-text').textContent = '0%';
+            document.getElementById('task-status-text').textContent = '시작 중...';
+            document.getElementById('task-logs').innerHTML = '<div class="text-gray-500">대기 중...</div>';
+        }
+        
+        function closeTaskModal() {
+            document.getElementById('taskModal').style.display = 'none';
+            if (taskStatusInterval) {
+                clearInterval(taskStatusInterval);
+                taskStatusInterval = null;
+            }
+            currentTaskId = null;
+        }
+        
+        function updateTaskProgress(progress, status) {
+            const progressBar = document.getElementById('task-progress-bar');
+            const progressText = document.getElementById('task-progress-text');
+            const statusText = document.getElementById('task-status-text');
+            
+            progressBar.style.width = progress + '%';
+            progressText.textContent = progress + '%';
+            
+            if (status === 'completed') {
+                statusText.textContent = '✓ 완료';
+                progressBar.classList.remove('bg-blue-500');
+                progressBar.classList.add('bg-green-500');
+            } else if (status === 'failed') {
+                statusText.textContent = '✗ 실패';
+                progressBar.classList.remove('bg-blue-500');
+                progressBar.classList.add('bg-red-500');
+            } else {
+                statusText.textContent = '진행 중...';
+            }
+        }
+        
+        function updateTaskLogs(logs) {
+            const logsContainer = document.getElementById('task-logs');
+            logsContainer.innerHTML = '';
+            
+            logs.forEach(log => {
+                const logLine = document.createElement('div');
+                logLine.className = 'mb-1';
+                
+                if (log.startsWith('✓')) {
+                    logLine.className += ' text-green-400';
+                } else if (log.startsWith('✗')) {
+                    logLine.className += ' text-red-400';
+                } else if (log.startsWith('📊') || log.startsWith('🎯') || log.startsWith('📄')) {
+                    logLine.className += ' text-blue-400';
+                } else {
+                    logLine.className += ' text-gray-300';
+                }
+                
+                logLine.textContent = log;
+                logsContainer.appendChild(logLine);
+            });
+            
+            // 자동 스크롤
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        // ========================================
+        // 차트 리사이징 기능
+        // ========================================
+        document.addEventListener('DOMContentLoaded', function() {
+            // 저장된 차트 크기 로드
+            const chartSizes = JSON.parse(localStorage.getItem('chartSizes') || '{}');
+            
+            const resizableCharts = document.querySelectorAll('.resizable-chart');
+            
+            resizableCharts.forEach(chartContainer => {
+                // 저장된 크기 적용
+                const canvas = chartContainer.querySelector('canvas');
+                if (canvas && chartSizes[canvas.id]) {
+                    chartContainer.style.width = chartSizes[canvas.id].width;
+                    chartContainer.style.height = chartSizes[canvas.id].height;
+                    console.log(`차트 ${canvas.id} 크기 로드:`, chartSizes[canvas.id]);
+                }
+                
+                const resizeHandle = chartContainer.querySelector('.resize-handle');
+                let isResizing = false;
+                let startX, startY, startWidth, startHeight;
+                
+                resizeHandle.addEventListener('mousedown', function(e) {
+                    isResizing = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    startWidth = chartContainer.offsetWidth;
+                    startHeight = chartContainer.offsetHeight;
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    document.body.style.cursor = 'nwse-resize';
+                    document.body.style.userSelect = 'none';
+                });
+                
+                document.addEventListener('mousemove', function(e) {
+                    if (!isResizing) return;
+                    
+                    const deltaX = e.clientX - startX;
+                    const deltaY = e.clientY - startY;
+                    
+                    const newWidth = Math.max(300, startWidth + deltaX);
+                    const newHeight = Math.max(300, startHeight + deltaY);
+                    
+                    chartContainer.style.width = newWidth + 'px';
+                    chartContainer.style.height = newHeight + 'px';
+                    
+                    // Chart.js 리사이즈
+                    const canvas = chartContainer.querySelector('canvas');
+                    if (canvas) {
+                        const chart = Chart.getChart(canvas);
+                        if (chart) {
+                            chart.resize();
+                        }
+                    }
+                });
+                
+                document.addEventListener('mouseup', function() {
+                    if (isResizing) {
+                        isResizing = false;
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                        
+                        // 차트 크기 저장
+                        const chartId = chartContainer.querySelector('canvas')?.id;
+                        if (chartId) {
+                            const chartSizes = JSON.parse(localStorage.getItem('chartSizes') || '{}');
+                            chartSizes[chartId] = {
+                                width: chartContainer.style.width,
+                                height: chartContainer.style.height
+                            };
+                            localStorage.setItem('chartSizes', JSON.stringify(chartSizes));
+                            console.log(`차트 ${chartId} 크기 저장:`, chartSizes[chartId]);
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

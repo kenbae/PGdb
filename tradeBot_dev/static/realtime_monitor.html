@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 모니터링 - Trading Bot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: #0b0e11;
+            color: #eaecef;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .trade-entry {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-connected {
+            background: #0ecb81;
+            box-shadow: 0 0 8px #0ecb81;
+        }
+        .status-disconnected {
+            background: #f6465d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto px-4 py-6">
+        <!-- 헤더 -->
+        <div class="bg-gray-800 rounded-lg p-4 mb-6 flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-yellow-400">📊 실시간 모니터링</h1>
+                <p class="text-sm text-gray-400 mt-1">진입/청산 내역을 실시간으로 확인합니다</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center">
+                    <span id="connection-status" class="status-indicator status-disconnected"></span>
+                    <span id="connection-text" class="text-sm">연결 끊김</span>
+                </div>
+                <div class="text-sm text-gray-400">
+                    <span id="current-time"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 통계 카드 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-sm text-gray-400 mb-1">총 거래</div>
+                <div class="text-2xl font-bold" id="total-trades">0</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-sm text-gray-400 mb-1">진입</div>
+                <div class="text-2xl font-bold text-green-400" id="total-entries">0</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-sm text-gray-400 mb-1">청산</div>
+                <div class="text-2xl font-bold text-yellow-400" id="total-exits">0</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-sm text-gray-400 mb-1">누적 PnL</div>
+                <div class="text-2xl font-bold" id="total-pnl">$0.00</div>
+            </div>
+        </div>
+
+        <!-- 거래 내역 테이블 -->
+        <div class="bg-gray-800 rounded-lg border border-gray-700">
+            <div class="p-4 border-b border-gray-700">
+                <h2 class="text-lg font-bold">📋 거래 내역</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-900">
+                        <tr>
+                            <th class="px-4 py-3 text-left">시간</th>
+                            <th class="px-4 py-3 text-left">유형</th>
+                            <th class="px-4 py-3 text-left">방향</th>
+                            <th class="px-4 py-3 text-right">가격</th>
+                            <th class="px-4 py-3 text-right">수량</th>
+                            <th class="px-4 py-3 text-left">사유</th>
+                            <th class="px-4 py-3 text-right">PnL</th>
+                            <th class="px-4 py-3 text-right">PnL %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trades-table-body">
+                        <tr>
+                            <td colspan="8" class="px-4 py-8 text-center text-gray-500">
+                                거래 내역이 없습니다. 실시간 트레이딩을 시작하면 여기에 표시됩니다.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let ws = null;
+        let reconnectInterval = null;
+        let trades = [];
+        let stats = {
+            totalTrades: 0,
+            totalEntries: 0,
+            totalExits: 0,
+            totalPnl: 0
+        };
+
+        // 시간 업데이트
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString('ko-KR');
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // WebSocket 연결
+        function connectWebSocket() {
+            const wsUrl = API_BASE.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/realtime';
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('WebSocket 연결됨');
+                document.getElementById('connection-status').className = 'status-indicator status-connected';
+                document.getElementById('connection-text').textContent = '연결됨';
+                clearInterval(reconnectInterval);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (e) {
+                    console.error('WebSocket 메시지 파싱 오류:', e);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket 오류:', error);
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket 연결 종료');
+                document.getElementById('connection-status').className = 'status-indicator status-disconnected';
+                document.getElementById('connection-text').textContent = '연결 끊김';
+                
+                // 재연결 시도
+                reconnectInterval = setInterval(() => {
+                    console.log('WebSocket 재연결 시도...');
+                    connectWebSocket();
+                }, 5000);
+            };
+
+            // Ping 전송 (30초마다)
+            setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send('ping');
+                }
+            }, 30000);
+        }
+
+        // WebSocket 메시지 처리
+        function handleWebSocketMessage(data) {
+            if (data.type === 'trade_event') {
+                handleTradeEvent(data.event);
+            } else if (data.type === 'status_update') {
+                // 상태 업데이트는 필요시 사용
+            }
+        }
+
+        // 거래 이벤트 처리
+        function handleTradeEvent(event) {
+            const tradeData = event.data;
+            
+            if (event.type === 'entry') {
+                // 진입 이벤트
+                stats.totalEntries++;
+                stats.totalTrades++;
+                addTradeToTable(tradeData, 'entry');
+            } else if (event.type === 'exit') {
+                // 청산 이벤트
+                stats.totalExits++;
+                stats.totalTrades++;
+                const pnl = tradeData.pnl;
+                if (pnl !== null && pnl !== undefined) {
+                    stats.totalPnl += pnl;
+                }
+                addTradeToTable(tradeData, 'exit');
+            }
+            
+            updateStats();
+        }
+
+        // 테이블에 거래 추가
+        function addTradeToTable(tradeData, eventType) {
+            const tbody = document.getElementById('trades-table-body');
+            
+            // 빈 메시지 제거
+            if (tbody.children.length === 1 && tbody.children[0].querySelector('td[colspan]')) {
+                tbody.innerHTML = '';
+            }
+
+            const row = document.createElement('tr');
+            row.className = 'trade-entry border-b border-gray-700';
+            
+            if (eventType === 'entry') {
+                row.classList.add('bg-green-900/20');
+            } else {
+                const pnl = tradeData.pnl || 0;
+                if (pnl >= 0) {
+                    row.classList.add('bg-green-900/30');
+                } else {
+                    row.classList.add('bg-red-900/30');
+                }
+            }
+
+            const timeStr = tradeData.time || tradeData.entry_time || tradeData.exit_time;
+            const time = timeStr ? new Date(timeStr) : new Date();
+            const typeBadge = eventType === 'entry' 
+                ? '<span class="px-2 py-1 bg-green-600 text-white rounded text-xs font-bold">진입</span>'
+                : '<span class="px-2 py-1 bg-yellow-600 text-white rounded text-xs font-bold">청산</span>';
+            
+            const side = tradeData.side || '';
+            const direction = tradeData.direction || (side === 'BUY' || side === 'buy' ? 'long' : 'short');
+            const directionBadge = direction === 'long'
+                ? '<span class="px-2 py-1 bg-blue-600 text-white rounded text-xs font-bold">LONG</span>'
+                : '<span class="px-2 py-1 bg-red-600 text-white rounded text-xs font-bold">SHORT</span>';
+
+            const price = eventType === 'entry' 
+                ? (tradeData.entry_price || tradeData.price || 0)
+                : (tradeData.exit_price || tradeData.price || 0);
+            
+            const quantity = tradeData.quantity || tradeData.size || 0;
+            const reason = tradeData.exit_reason || tradeData.reason || (eventType === 'entry' ? (tradeData.entry_type || 'signal') : '-');
+            const pnl = tradeData.pnl !== null && tradeData.pnl !== undefined ? tradeData.pnl : (eventType === 'exit' ? 0 : null);
+            const pnlPct = tradeData.pnl_pct !== null && tradeData.pnl_pct !== undefined ? tradeData.pnl_pct : (tradeData.pnl_percent !== null && tradeData.pnl_percent !== undefined ? tradeData.pnl_percent : (eventType === 'exit' ? 0 : null));
+            
+            // 안전한 숫자 변환 (NaN 체크 포함)
+            const safePrice = (price != null && !isNaN(price) && typeof price === 'number') ? price : 0;
+            const safeQuantity = (quantity != null && !isNaN(quantity) && typeof quantity === 'number') ? quantity : 0;
+
+            row.innerHTML = `
+                <td class="px-4 py-3">${time.toLocaleString('ko-KR')}</td>
+                <td class="px-4 py-3">${typeBadge}</td>
+                <td class="px-4 py-3">${directionBadge}</td>
+                <td class="px-4 py-3 text-right font-mono">$${safePrice.toFixed(2)}</td>
+                <td class="px-4 py-3 text-right font-mono">${safeQuantity.toFixed(4)}</td>
+                <td class="px-4 py-3">
+                    <span class="px-2 py-1 bg-gray-700 rounded text-xs">${reason}</span>
+                </td>
+                <td class="px-4 py-3 text-right font-mono font-bold ${pnl !== null && !isNaN(pnl) ? (pnl >= 0 ? 'text-green-400' : 'text-red-400') : 'text-gray-400'}">
+                    ${eventType === 'exit' && pnl !== null && !isNaN(pnl) ? (pnl >= 0 ? '+' : '') + Number(pnl).toFixed(2) : '-'}
+                </td>
+                <td class="px-4 py-3 text-right font-mono font-bold ${pnlPct !== null && !isNaN(pnlPct) ? (pnlPct >= 0 ? 'text-green-400' : 'text-red-400') : 'text-gray-400'}">
+                    ${eventType === 'exit' && pnlPct !== null && !isNaN(pnlPct) ? (pnlPct >= 0 ? '+' : '') + Number(pnlPct).toFixed(2) + '%' : '-'}
+                </td>
+            `;
+
+            tbody.insertBefore(row, tbody.firstChild);
+
+            // 최대 100개만 유지
+            while (tbody.children.length > 100) {
+                tbody.removeChild(tbody.lastChild);
+            }
+        }
+
+        // 통계 업데이트
+        function updateStats() {
+            document.getElementById('total-trades').textContent = stats.totalTrades || 0;
+            document.getElementById('total-entries').textContent = stats.totalEntries || 0;
+            document.getElementById('total-exits').textContent = stats.totalExits || 0;
+            const safeTotalPnl = (stats.totalPnl != null && !isNaN(stats.totalPnl) && typeof stats.totalPnl === 'number') ? stats.totalPnl : 0;
+            const pnlColor = safeTotalPnl >= 0 ? 'text-green-400' : 'text-red-400';
+            document.getElementById('total-pnl').className = `text-2xl font-bold ${pnlColor}`;
+            document.getElementById('total-pnl').textContent = `$${safeTotalPnl.toFixed(2)}`;
+        }
+
+        // 초기 연결
+        connectWebSocket();
+
+        // 페이지 언로드 시 연결 종료
+        window.addEventListener('beforeunload', () => {
+            if (ws) {
+                ws.close();
+            }
+            if (reconnectInterval) {
+                clearInterval(reconnectInterval);
+            }
+        });
+    </script>
+</body>
+</html>

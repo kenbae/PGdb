@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Trading Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        .card { 
+            background: white; 
+            border-radius: 8px; 
+            padding: 20px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .metric { 
+            font-size: 2rem; 
+            font-weight: bold; 
+            margin-top: 8px;
+        }
+        .metric-label { 
+            color: #6B7280; 
+            font-size: 0.875rem; 
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,.1);
+            border-radius: 50%;
+            border-top-color: #3B82F6;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .badge-long {
+            background: #DCFCE7;
+            color: #166534;
+        }
+        .badge-short {
+            background: #FEE2E2;
+            color: #991B1B;
+        }
+        .sort-icon {
+            font-size: 0.75rem;
+            color: #9CA3AF;
+            margin-left: 4px;
+        }
+        .sort-icon.active {
+            color: #3B82F6;
+        }
+        th.cursor-pointer:hover .sort-icon {
+            color: #6B7280;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-800">📊 Crypto Trading Dashboard</h1>
+                    <p class="text-gray-600 mt-2">실시간 트레이딩 성과 분석 및 모니터링</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-gray-500">마지막 업데이트</div>
+                    <div class="text-lg font-semibold text-gray-700" id="last-update">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 통계 카드 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="card">
+                <div class="metric-label">총 신호</div>
+                <div class="metric text-blue-600" id="total-signals">
+                    <span class="loading"></span>
+                </div>
+            </div>
+            <div class="card">
+                <div class="metric-label">승률</div>
+                <div class="metric text-green-600" id="win-rate">
+                    <span class="loading"></span>
+                </div>
+            </div>
+            <div class="card">
+                <div class="metric-label">평균 R-Multiple</div>
+                <div class="metric text-purple-600" id="avg-r">
+                    <span class="loading"></span>
+                </div>
+            </div>
+            <div class="card">
+                <div class="metric-label">총 수익</div>
+                <div class="metric text-orange-600" id="total-profit">
+                    <span class="loading"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 차트 영역 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">결과 분포</h2>
+                <canvas id="resultChart"></canvas>
+            </div>
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">일별 누적 수익</h2>
+                <canvas id="profitChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 필터 및 검색 -->
+        <div class="card mb-6">
+            <div class="flex flex-wrap items-center gap-4">
+                <div>
+                    <label class="text-sm font-medium text-gray-700 mr-2">심볼 필터:</label>
+                    <select id="symbol-filter" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">전체</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-700 mr-2">표시 개수:</label>
+                    <select id="limit-filter" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="20">20개</option>
+                        <option value="50">50개</option>
+                        <option value="100">100개</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-700 mr-2">정렬:</label>
+                    <select id="sort-select" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="handleSortChange()">
+                        <option value="time-desc">최신순 (시간 ↓)</option>
+                        <option value="time-asc">오래된 순 (시간 ↑)</option>
+                        <option value="r_multiple-desc">R-Multiple 높은 순</option>
+                        <option value="r_multiple-asc">R-Multiple 낮은 순</option>
+                        <option value="score-desc">점수 높은 순</option>
+                        <option value="score-asc">점수 낮은 순</option>
+                    </select>
+                </div>
+                <button onclick="refreshData()" class="ml-auto bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                    🔄 새로고침
+                </button>
+            </div>
+        </div>
+
+        <!-- 최근 신호 테이블 -->
+        <div class="card">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">최근 신호</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200" id="signals-table">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onclick="sortTable('time')">
+                                시간 <span id="sort-icon-time" class="sort-icon">⇅</span>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">심볼</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TF</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">방향</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">진입가</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">결과</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onclick="sortTable('r_multiple')">
+                                R-Multiple <span id="sort-icon-r_multiple" class="sort-icon">⇅</span>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onclick="sortTable('score')">
+                                점수 <span id="sort-icon-score" class="sort-icon">⇅</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="signals-body">
+                        <tr>
+                            <td colspan="8" class="px-6 py-8 text-center text-gray-500">
+                                <div class="loading inline-block"></div>
+                                <span class="ml-2">로딩 중...</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let resultChart = null;
+        let profitChart = null;
+        let currentSignalsData = []; // 현재 로드된 신호 데이터
+        let currentSortColumn = 'time';
+        let currentSortOrder = 'desc'; // 'asc' or 'desc'
+
+        // 시간 포맷 함수
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // 숫자 포맷 함수
+        function formatNumber(num, decimals = 2) {
+            if (num === null || num === undefined) return '-';
+            return Number(num).toFixed(decimals);
+        }
+
+        // 통계 데이터 가져오기
+        async function fetchStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                document.getElementById('total-signals').textContent = data.total_signals || 0;
+                document.getElementById('win-rate').textContent = data.win_rate ? data.win_rate.toFixed(1) + '%' : '0%';
+                document.getElementById('avg-r').textContent = data.avg_r ? data.avg_r.toFixed(2) + 'R' : '0R';
+                document.getElementById('total-profit').textContent = data.total_profit ? data.total_profit.toFixed(2) + 'R' : '0R';
+                
+                updateLastUpdateTime();
+            } catch (error) {
+                console.error('통계 로드 실패:', error);
+            }
+        }
+
+        // 결과 분포 차트
+        async function fetchResultDistribution() {
+            try {
+                const response = await fetch('/api/result-distribution');
+                const data = await response.json();
+                
+                const ctx = document.getElementById('resultChart').getContext('2d');
+                
+                if (resultChart) {
+                    resultChart.destroy();
+                }
+                
+                resultChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            data: data.values,
+                            backgroundColor: [
+                                '#10B981', // TP2 - 녹색
+                                '#3B82F6', // TP1 - 파랑
+                                '#EF4444', // SL - 빨강
+                                '#9CA3AF'  // NONE - 회색
+                            ],
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: { 
+                                position: 'bottom',
+                                labels: {
+                                    padding: 15,
+                                    font: { size: 12 }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.parsed || 0;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((value / total) * 100).toFixed(1);
+                                        return `${label}: ${value}개 (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('결과 분포 로드 실패:', error);
+            }
+        }
+
+        // 일별 수익 차트
+        async function fetchDailyProfit() {
+            try {
+                const response = await fetch('/api/daily-profit?days=30');
+                const data = await response.json();
+                
+                const ctx = document.getElementById('profitChart').getContext('2d');
+                
+                if (profitChart) {
+                    profitChart.destroy();
+                }
+                
+                profitChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.dates,
+                        datasets: [{
+                            label: '누적 R-Multiple',
+                            data: data.cumulative_profit,
+                            borderColor: '#8B5CF6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 3,
+                            pointHoverRadius: 5,
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `누적 수익: ${context.parsed.y.toFixed(2)}R`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: { 
+                                beginAtZero: true,
+                                grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                            },
+                            x: {
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('일별 수익 로드 실패:', error);
+            }
+        }
+
+        // 최근 신호 목록
+        async function fetchRecentSignals() {
+            try {
+                const symbol = document.getElementById('symbol-filter').value;
+                const limit = document.getElementById('limit-filter').value;
+                
+                let url = `/api/recent-signals?limit=${limit}`;
+                if (symbol) {
+                    url += `&symbol=${symbol}`;
+                }
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                // 데이터 저장
+                currentSignalsData = data;
+                
+                // 정렬 적용
+                sortAndDisplaySignals();
+                
+            } catch (error) {
+                console.error('신호 목록 로드 실패:', error);
+                document.getElementById('signals-body').innerHTML = 
+                    '<tr><td colspan="8" class="px-6 py-8 text-center text-red-500">데이터 로드 실패</td></tr>';
+            }
+        }
+
+        // 정렬 및 표시
+        function sortAndDisplaySignals() {
+            if (currentSignalsData.length === 0) {
+                document.getElementById('signals-body').innerHTML = 
+                    '<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">신호가 없습니다.</td></tr>';
+                return;
+            }
+
+            // 데이터 정렬
+            const sortedData = [...currentSignalsData].sort((a, b) => {
+                let valA, valB;
+
+                switch(currentSortColumn) {
+                    case 'time':
+                        valA = new Date(a.open_time).getTime();
+                        valB = new Date(b.open_time).getTime();
+                        break;
+                    case 'r_multiple':
+                        valA = a.r_multiple !== null ? a.r_multiple : -999;
+                        valB = b.r_multiple !== null ? b.r_multiple : -999;
+                        break;
+                    case 'score':
+                        valA = a.score !== null ? a.score : -999;
+                        valB = b.score !== null ? b.score : -999;
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (currentSortOrder === 'asc') {
+                    return valA - valB;
+                } else {
+                    return valB - valA;
+                }
+            });
+
+            // 테이블 표시
+            displaySignalsTable(sortedData);
+            
+            // 정렬 아이콘 업데이트
+            updateSortIcons();
+        }
+
+        // 테이블 표시
+        function displaySignalsTable(data) {
+            const tbody = document.getElementById('signals-body');
+            tbody.innerHTML = '';
+            
+            data.forEach(signal => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors';
+                
+                const resultColors = {
+                    'tp2': 'text-green-600 font-semibold',
+                    'tp1': 'text-blue-600 font-medium',
+                    'sl': 'text-red-600 font-medium',
+                    'none': 'text-gray-500'
+                };
+                
+                const resultEmojis = {
+                    'tp2': '✓✓',
+                    'tp1': '✓',
+                    'sl': '✗',
+                    'none': '○'
+                };
+                
+                const rMultipleColor = signal.r_multiple > 0 ? 'text-green-600 font-semibold' : 
+                                      signal.r_multiple < 0 ? 'text-red-600 font-semibold' : 
+                                      'text-gray-500';
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        ${formatDateTime(signal.open_time)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        ${signal.symbol}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        ${signal.tf}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="badge ${signal.direction === 'long' ? 'badge-long' : 'badge-short'}">
+                            ${signal.direction.toUpperCase()}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-mono">
+                        ${formatNumber(signal.entry, 2)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm ${resultColors[signal.result] || ''}">
+                        ${resultEmojis[signal.result] || ''} ${signal.result ? signal.result.toUpperCase() : '-'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm ${rMultipleColor} font-mono">
+                        ${signal.r_multiple !== null ? formatNumber(signal.r_multiple, 2) + 'R' : '-'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        ${signal.score || '-'}
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 정렬 함수
+        function sortTable(column) {
+            if (currentSortColumn === column) {
+                // 같은 컬럼 클릭 시 정렬 순서 반전
+                currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                // 다른 컬럼 클릭 시 해당 컬럼으로 내림차순 정렬
+                currentSortColumn = column;
+                currentSortOrder = 'desc';
+            }
+            
+            sortAndDisplaySignals();
+        }
+
+        // 정렬 아이콘 업데이트
+        function updateSortIcons() {
+            // 모든 아이콘 초기화
+            ['time', 'r_multiple', 'score'].forEach(col => {
+                const icon = document.getElementById(`sort-icon-${col}`);
+                if (icon) {
+                    icon.className = 'sort-icon';
+                    icon.textContent = '⇅';
+                }
+            });
+
+            // 현재 정렬 컬럼 아이콘 활성화
+            const activeIcon = document.getElementById(`sort-icon-${currentSortColumn}`);
+            if (activeIcon) {
+                activeIcon.className = 'sort-icon active';
+                activeIcon.textContent = currentSortOrder === 'asc' ? '↑' : '↓';
+            }
+
+            // 드롭다운 선택 업데이트
+            const sortSelect = document.getElementById('sort-select');
+            if (sortSelect) {
+                sortSelect.value = `${currentSortColumn}-${currentSortOrder}`;
+            }
+        }
+
+        // 정렬 드롭다운 변경 핸들러
+        function handleSortChange() {
+            const sortSelect = document.getElementById('sort-select');
+            const [column, order] = sortSelect.value.split('-');
+            currentSortColumn = column;
+            currentSortOrder = order;
+            sortAndDisplaySignals();
+        }
+
+        // 심볼 목록 로드
+        async function loadSymbols() {
+            try {
+                const response = await fetch('/api/symbols');
+                const symbols = await response.json();
+                
+                const select = document.getElementById('symbol-filter');
+                symbols.forEach(symbol => {
+                    const option = document.createElement('option');
+                    option.value = symbol;
+                    option.textContent = symbol;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('심볼 목록 로드 실패:', error);
+            }
+        }
+
+        // 마지막 업데이트 시간 표시
+        function updateLastUpdateTime() {
+            const now = new Date();
+            document.getElementById('last-update').textContent = now.toLocaleTimeString('ko-KR');
+        }
+
+        // 전체 데이터 새로고침
+        function refreshData() {
+            fetchStats();
+            fetchResultDistribution();
+            fetchDailyProfit();
+            fetchRecentSignals();
+        }
+
+        // 필터 변경 시 이벤트
+        document.getElementById('symbol-filter').addEventListener('change', fetchRecentSignals);
+        document.getElementById('limit-filter').addEventListener('change', fetchRecentSignals);
+
+        // 페이지 로드 시 초기화
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSymbols();
+            refreshData();
+            
+            // 1분마다 자동 새로고침
+            setInterval(() => {
+                fetchStats();
+                fetchRecentSignals();
+            }, 60000);
+        });
+    </script>
+</body>
+</html>

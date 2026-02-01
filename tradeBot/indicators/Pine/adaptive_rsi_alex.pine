@@ -1,0 +1,114 @@
+//@version=5
+// ============================================
+// Adaptive RSI (Alex Gonzalez)
+// Kaufman 효율성 비율 기반 동적 RSI
+// ============================================
+indicator("Adaptive RSI [Alex Gonzalez]", overlay=false)
+
+// 입력 파라미터
+srcInput = input.source(close, "Source")
+erLength = input.int(10, "Efficiency Ratio Length", minval=2)
+fastLength = input.int(2, "Fast RSI Length", minval=2)
+slowLength = input.int(30, "Slow RSI Length", minval=5)
+smoothLength = input.int(3, "Smoothing Length", minval=1)
+overbought = input.int(70, "Overbought Level")
+oversold = input.int(30, "Oversold Level")
+
+// ============================================
+// Kaufman Efficiency Ratio (ER) 계산
+// ER = 방향성 움직임 / 총 움직임
+// 1에 가까우면 추세적, 0에 가까우면 횡보
+// ============================================
+change_abs = math.abs(srcInput - srcInput[erLength])
+volatility = math.sum(math.abs(srcInput - srcInput[1]), erLength)
+er = volatility != 0 ? change_abs / volatility : 0
+
+// ============================================
+// 적응형 RSI 기간 계산
+// 추세적일 때(ER 높음) → 빠른 RSI (민감)
+// 횡보일 때(ER 낮음) → 느린 RSI (둔감)
+// ============================================
+adaptiveLength = math.round(fastLength + (1 - er) * (slowLength - fastLength))
+adaptiveLength := math.max(2, adaptiveLength)  // 최소 2
+
+// ============================================
+// 적응형 RSI 계산
+// ============================================
+// 표준 RSI 계산 함수
+rsi_calc(src, len) =>
+    up = ta.rma(math.max(ta.change(src), 0), len)
+    down = ta.rma(-math.min(ta.change(src), 0), len)
+    down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
+
+// 적응형 RSI (동적 기간)
+// Pine Script에서 동적 기간을 직접 사용할 수 없으므로 보간법 사용
+fastRSI = rsi_calc(srcInput, fastLength)
+slowRSI = rsi_calc(srcInput, slowLength)
+
+// ER 기반 가중 평균으로 적응형 RSI 생성
+adaptiveRSI = er * fastRSI + (1 - er) * slowRSI
+
+// 스무딩
+smoothedRSI = ta.ema(adaptiveRSI, smoothLength)
+
+// 시그널 라인
+signalLine = ta.ema(smoothedRSI, 9)
+
+// ============================================
+// 동적 밴드 계산 (두 RSI 사이 영역)
+// ============================================
+upperBand = math.max(smoothedRSI, signalLine)
+lowerBand = math.min(smoothedRSI, signalLine)
+
+// ============================================
+// 색상 정의
+// ============================================
+rsiColor = smoothedRSI > signalLine ? color.red : color.blue
+fillColor = smoothedRSI > signalLine ? color.new(color.green, 80) : color.new(color.red, 80)
+
+// ============================================
+// 플롯
+// ============================================
+p1 = plot(smoothedRSI, "Adaptive RSI", color=rsiColor, linewidth=2)
+p2 = plot(signalLine, "Signal", color=color.blue, linewidth=1)
+
+// 두 라인 사이 채우기
+fill(p1, p2, color=fillColor, title="RSI Fill")
+
+// 기준선
+hline(overbought, "Overbought", color=color.gray, linestyle=hline.style_dashed)
+hline(oversold, "Oversold", color=color.gray, linestyle=hline.style_dashed)
+hline(50, "Middle", color=color.gray, linestyle=hline.style_dotted)
+
+// ============================================
+// 신호
+// ============================================
+bullCross = ta.crossover(smoothedRSI, signalLine) and smoothedRSI < 45
+bearCross = ta.crossunder(smoothedRSI, signalLine) and smoothedRSI > 55
+
+plotshape(bullCross, "Buy Signal", shape.triangleup, location.bottom, color.green, size=size.small)
+plotshape(bearCross, "Sell Signal", shape.triangledown, location.top, color.red, size=size.small)
+
+// ============================================
+// 정보 테이블
+// ============================================
+var table infoTable = table.new(position.top_right, 2, 4, bgcolor=color.new(color.black, 80))
+if barstate.islast
+    table.cell(infoTable, 0, 0, "Adaptive RSI", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 0, str.tostring(smoothedRSI, "#.#"), text_color=rsiColor, text_size=size.small)
+    table.cell(infoTable, 0, 1, "ER", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 1, str.tostring(er, "#.##"), text_color=er > 0.5 ? color.green : color.orange, text_size=size.small)
+    table.cell(infoTable, 0, 2, "Period", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 2, str.tostring(adaptiveLength), text_color=color.yellow, text_size=size.small)
+    table.cell(infoTable, 0, 3, "Zone", text_color=color.white, text_size=size.small)
+    zoneText = smoothedRSI > overbought ? "OB" : smoothedRSI < oversold ? "OS" : "N"
+    zoneColor = smoothedRSI > overbought ? color.red : smoothedRSI < oversold ? color.green : color.gray
+    table.cell(infoTable, 1, 3, zoneText, text_color=zoneColor, text_size=size.small)
+
+// ============================================
+// 알림
+// ============================================
+alertcondition(bullCross, "Adaptive RSI Bullish", "Adaptive RSI 매수 크로스")
+alertcondition(bearCross, "Adaptive RSI Bearish", "Adaptive RSI 매도 크로스")
+alertcondition(smoothedRSI > overbought, "Overbought", "Adaptive RSI 과매수")
+alertcondition(smoothedRSI < oversold, "Oversold", "Adaptive RSI 과매도")

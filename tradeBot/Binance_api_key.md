@@ -1,0 +1,16 @@
+TESTNET
+
+HMAC-SHA-256 Key registered
+Save these values right now. They won't be shown ever again!
+
+API Key: zmtoyyIMP8rJckLiy7H4JHEiKsvScuA1L4ukGyRVnSQyJHJ08vKNVsmD3HhVRsRx
+
+Secret Key: iCkAE7BV0E324HZlw8c4q0SpsEww66f1gSOX5lFPknVmdMSnxHXYfh1ErTFC640W
+
+
+
+REAL KEY
+
+# Binance USDT-M Futures (NO WITHDRAW PERMISSION)
+BINANCE_API_KEY=Aat5s7kbbTXPDh7pwFOIooPCwJoRsZBLIafVblbA6BtMUg9nH7J5G0puEGJZrqrB
+BINANCE_API_SECRET=LZT2kQhbyFr7tZdUg2L22eI5EBR5z8EgIPWC7nElvBuBWKkoyz3DXwXAU4uQISfO

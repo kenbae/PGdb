@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실행 종목 거래 세트 (진입·청산) - Trading Bot</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0b0e11;
+            --bg-secondary: #1e2329;
+            --bg-tertiary: #2b3139;
+            --text-primary: #eaecef;
+            --text-secondary: #848e9c;
+            --text-muted: #5e6673;
+            --border-color: #2b3139;
+            --green: #0ecb81;
+            --red: #f6465d;
+            --yellow: #f0b90b;
+            --blue: #1e80ff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 13px;
+            min-height: 100vh;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .logo { font-size: 18px; font-weight: 700; color: var(--yellow); margin-right: 20px; }
+        .header a { color: var(--blue); text-decoration: none; }
+        .header a:hover { text-decoration: underline; }
+        .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+        .panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .panel h3 { font-size: 14px; margin-bottom: 16px; color: var(--text-primary); }
+        .filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .filter-row label { min-width: 70px; color: var(--text-secondary); }
+        .filter-row input, .filter-row select {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--blue);
+            color: #fff;
+        }
+        .btn:hover { opacity: 0.9; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--text-secondary); font-weight: 600; }
+        td.num { text-align: right; }
+        .align-ok { color: var(--green); font-weight: 600; }
+        .align-no { color: var(--red); font-weight: 600; }
+        .pos-yes { color: var(--green); }
+        .pos-no { color: var(--text-muted); }
+        .expand-btn { cursor: pointer; color: var(--blue); font-size: 11px; }
+        .expand-row td { background: var(--bg-tertiary); padding: 12px; font-size: 11px; }
+        .expand-row pre { white-space: pre-wrap; word-break: break-all; margin: 0; }
+        .empty { padding: 40px; text-align: center; color: var(--text-muted); }
+        .btn-quick { padding: 6px 12px; font-size: 12px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-tertiary); color: var(--text-secondary); cursor: pointer; }
+        .btn-quick:hover { background: var(--bg-secondary); color: var(--text-primary); border-color: var(--blue); }
+        .symbol-pnl-list { display: flex; flex-wrap: wrap; gap: 12px; }
+        .symbol-pnl-item { padding: 8px 14px; border-radius: 6px; background: var(--bg-tertiary); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+        .symbol-pnl-item .sym { font-weight: 600; color: var(--text-primary); min-width: 80px; }
+        .symbol-pnl-item .pnl { font-weight: 600; }
+        .symbol-pnl-item .pnl.positive { color: var(--green); }
+        .symbol-pnl-item .pnl.negative { color: var(--red); }
+        td .positive { color: var(--green); font-weight: 600; }
+        td .negative { color: var(--red); font-weight: 600; }
+        .filter-click { cursor: pointer; color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+        .filter-click:hover { color: var(--yellow); }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <span class="logo">📊 실행 종목 거래 세트</span>
+        <a href="/">실시간 트레이딩</a>
+    </header>
+    <div class="container">
+        <div class="panel">
+            <h3>조회 조건</h3>
+            <div class="filter-row">
+                <label>심볼</label>
+                <input type="text" id="filter-symbol" placeholder="예: ETHUSDT (비우면 전체)">
+                <label>전략</label>
+                <input type="text" id="filter-strategy" placeholder="예: ema_cross (비우면 전체)">
+                <label>시작일</label>
+                <input type="datetime-local" id="filter-from">
+                <label>종료일</label>
+                <input type="datetime-local" id="filter-to">
+                <label>건수</label>
+                <input type="number" id="filter-limit" value="200" min="1" max="1000" style="width:80px">
+                <button class="btn" id="btn-load">조회</button>
+                <span style="margin-left:8px; color: var(--text-muted); font-size:12px;">기간:</span>
+                <button type="button" class="btn-quick" data-period="today">오늘</button>
+                <button type="button" class="btn-quick" data-period="1w">1주일</button>
+                <button type="button" class="btn-quick" data-period="1m">1개월</button>
+            </div>
+            <p style="font-size:11px; color: var(--text-muted);">실시간 트레이딩으로 체결된 진입·청산 세트를 표시합니다. (tradebot_positions, source=realtime_trading)</p>
+            <div id="symbol-pnl-summary" class="symbol-pnl-summary" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border-color);">
+                <h4 style="font-size:12px; margin-bottom:10px; color: var(--text-secondary);">종목별 P&L 요약</h4>
+                <div id="symbol-pnl-list" class="symbol-pnl-list"></div>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-header-row" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                <h3 style="margin:0;">거래 세트 (진입·청산)</h3>
+                <div class="action-row" style="display:flex; align-items:center; gap:8px;">
+                    <label class="select-all-wrap" style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; color: var(--text-secondary);">
+                        <input type="checkbox" id="select-all" title="전체 선택">
+                        <span>전체 선택</span>
+                    </label>
+                    <button type="button" class="btn btn-danger" id="btn-delete-selected" style="background:var(--red);" disabled>
+                        선택 삭제
+                    </button>
+                    <span id="selected-count" style="font-size:12px; color: var(--text-muted);">0개 선택</span>
+                </div>
+            </div>
+            <div id="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:36px; padding:6px;">
+                                <input type="checkbox" id="select-all-header" title="전체 선택">
+                            </th>
+                            <th>진입 시각</th>
+                            <th>청산 시각</th>
+                            <th>심볼</th>
+                            <th>전략</th>
+                            <th>TF</th>
+                            <th>방향</th>
+                            <th class="num">진입가</th>
+                            <th class="num">청산가</th>
+                            <th class="num">P&L</th>
+                            <th class="num">P&L%</th>
+                            <th>지속</th>
+                            <th>청산 사유</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody">
+                    </tbody>
+                </table>
+            </div>
+            <div id="empty-msg" class="empty" style="display:none;">조건에 맞는 거래 세트가 없습니다. 실시간 트레이딩으로 체결된 포지션이 여기에 표시됩니다.</div>
+        </div>
+    </div>
+    <script>
+        const tbody = document.getElementById('tbody');
+        const emptyMsg = document.getElementById('empty-msg');
+        let currentTradeSets = [];  // 현재 조회된 목록 (필터 적용 결과)
+
+        function formatNum(v) {
+            if (v == null || v === '' || isNaN(v)) return '-';
+            return Number(v).toLocaleString(undefined, { maximumFractionDigits: 4 });
+        }
+        function formatTime(iso) {
+            if (!iso) return '-';
+            const d = new Date(iso);
+            return d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+        function toISOParam(val) {
+            if (!val) return undefined;
+            const d = new Date(val);
+            return isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 19) + 'Z';
+        }
+        async function load() {
+            const symbol = document.getElementById('filter-symbol').value.trim() || undefined;
+            const strategy = document.getElementById('filter-strategy').value.trim() || undefined;
+            const from = toISOParam(document.getElementById('filter-from').value);
+            const to = toISOParam(document.getElementById('filter-to').value);
+            const limit = parseInt(document.getElementById('filter-limit').value, 10) || 200;
+            const params = new URLSearchParams();
+            if (symbol) params.set('symbol', symbol);
+            if (strategy) params.set('strategy', strategy);
+            if (from) params.set('from_date', from);
+            if (to) params.set('to_date', to);
+            params.set('limit', limit);
+            const res = await fetch('/api/realtime/trade-sets?' + params.toString());
+            const data = await res.json();
+            if (!data.success) {
+                tbody.innerHTML = '<tr><td colspan="13" class="empty">조회 실패</td></tr>';
+                emptyMsg.style.display = 'none';
+                document.getElementById('symbol-pnl-summary').style.display = 'none';
+                return;
+            }
+            const list = data.trade_sets || [];
+            if (list.length === 0) {
+                currentTradeSets = [];
+                tbody.innerHTML = '';
+                emptyMsg.style.display = 'block';
+                document.getElementById('symbol-pnl-summary').style.display = 'none';
+                updateSelectionState();
+                return;
+            }
+            emptyMsg.style.display = 'none';
+            currentTradeSets = list;
+            const summary = computeSymbolPnlFromTradeSets(list);
+            renderSymbolPnlSummary(summary);
+            tbody.innerHTML = list.map((t) => {
+                const sideStr = (t.side || '').toLowerCase() === 'buy' ? 'LONG' : 'SHORT';
+                const sideCls = sideStr === 'LONG' ? 'pos-yes' : 'align-no';
+                const pnlVal = t.pnl != null && !isNaN(t.pnl) ? t.pnl : null;
+                const pnlPct = t.pnl_percent != null && !isNaN(t.pnl_percent) ? t.pnl_percent : null;
+                const pnlCls = (pnlVal != null ? pnlVal : (pnlPct != null ? pnlPct : 0)) >= 0 ? 'positive' : 'negative';
+                let pnlHtml = '-';
+                if (pnlVal != null || pnlPct != null) {
+                    const pnlStr = pnlVal != null ? '$' + (pnlVal >= 0 ? '+' : '') + Number(pnlVal).toFixed(2) : '-';
+                    pnlHtml = '<span class="' + pnlCls + '">' + pnlStr + '</span>';
+                }
+                let pctHtml = '-';
+                if (pnlPct != null && !isNaN(pnlPct)) {
+                    pctHtml = '<span class="' + pnlCls + '">' + (pnlPct >= 0 ? '+' : '') + Number(pnlPct).toFixed(2) + '%' + '</span>';
+                }
+                const durationStr = t.duration_minutes != null ? t.duration_minutes + '분' : '-';
+                const symVal = t.symbol || '-';
+                const stratVal = t.strategy || '-';
+                const symClass = symVal !== '-' ? 'filter-click' : '';
+                const stratClass = stratVal !== '-' ? 'filter-click' : '';
+                const pid = (t.position_id || '').replace(/"/g, '&quot;');
+                return '<tr data-position-id="' + pid + '">' +
+                    '<td style="width:36px; padding:6px;"><input type="checkbox" class="row-checkbox" value="' + pid + '"></td>' +
+                    '<td>' + formatTime(t.open_time) + '</td>' +
+                    '<td>' + formatTime(t.close_time) + '</td>' +
+                    '<td class="' + symClass + '" data-filter="symbol" data-value="' + (symVal !== '-' ? symVal : '') + '">' + symVal + '</td>' +
+                    '<td class="' + stratClass + '" data-filter="strategy" data-value="' + (stratVal !== '-' ? stratVal : '') + '">' + stratVal + '</td>' +
+                    '<td>' + (t.timeframe || '-') + '</td>' +
+                    '<td class="' + sideCls + '">' + sideStr + '</td>' +
+                    '<td class="num">' + (t.entry_price != null ? '$' + formatNum(t.entry_price) : '-') + '</td>' +
+                    '<td class="num">' + (t.exit_price != null ? '$' + formatNum(t.exit_price) : '-') + '</td>' +
+                    '<td class="num">' + pnlHtml + '</td>' +
+                    '<td class="num">' + pctHtml + '</td>' +
+                    '<td>' + durationStr + '</td>' +
+                    '<td style="font-size:11px; color: var(--text-secondary)">' + (t.exit_reason || '-') + '</td>' +
+                    '</tr>';
+            }).join('');
+
+            tbody.querySelectorAll('.filter-click').forEach(el => {
+                el.addEventListener('click', function() {
+                    const filter = this.getAttribute('data-filter');
+                    const value = this.getAttribute('data-value') || '';
+                    const input = document.getElementById('filter-' + filter);
+                    if (input) {
+                        input.value = value;
+                        load();
+                    }
+                });
+            });
+
+            updateSelectionState();
+            bindSelectionEvents();
+        }
+
+        function getSelectedPositionIds() {
+            return Array.from(tbody.querySelectorAll('.row-checkbox:checked')).map(cb => cb.value);
+        }
+
+        function updateSelectionState() {
+            const checkboxes = tbody.querySelectorAll('.row-checkbox');
+            const checked = tbody.querySelectorAll('.row-checkbox:checked');
+            const selectAll = document.getElementById('select-all');
+            const selectAllHeader = document.getElementById('select-all-header');
+            const btnDel = document.getElementById('btn-delete-selected');
+            const countEl = document.getElementById('selected-count');
+            if (selectAll) selectAll.checked = checkboxes.length > 0 && checked.length === checkboxes.length;
+            if (selectAllHeader) selectAllHeader.checked = checkboxes.length > 0 && checked.length === checkboxes.length;
+            if (btnDel) btnDel.disabled = checked.length === 0;
+            if (countEl) countEl.textContent = checked.length + '개 선택';
+        }
+
+        function bindSelectionEvents() {
+            const selectAll = document.getElementById('select-all');
+            const selectAllHeader = document.getElementById('select-all-header');
+            const btnDel = document.getElementById('btn-delete-selected');
+            if (selectAll) selectAll.onclick = null;
+            if (selectAllHeader) selectAllHeader.onclick = null;
+
+            function toggleAll(checked) {
+                tbody.querySelectorAll('.row-checkbox').forEach(cb => { cb.checked = checked; });
+                updateSelectionState();
+            }
+            if (selectAll) selectAll.addEventListener('change', function() { toggleAll(this.checked); });
+            if (selectAllHeader) selectAllHeader.addEventListener('change', function() { toggleAll(this.checked); });
+
+            tbody.addEventListener('change', function(e) {
+                if (e.target.classList.contains('row-checkbox')) updateSelectionState();
+            });
+
+            if (btnDel) btnDel.onclick = deleteSelected;
+        }
+
+        async function deleteSelected() {
+            const ids = getSelectedPositionIds();
+            if (ids.length === 0) {
+                alert('삭제할 항목을 선택하세요.');
+                return;
+            }
+            if (!confirm('선택한 ' + ids.length + '건을 삭제하시겠습니까?')) return;
+            try {
+                const res = await fetch('/api/realtime/trade-sets/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ position_ids: ids })
+                });
+                let data;
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    throw new Error('응답 파싱 실패 (HTTP ' + res.status + ')');
+                }
+                function toErrStr(v) {
+                    if (v == null) return '';
+                    if (typeof v === 'string') return v;
+                    if (Array.isArray(v) && v[0]) return v[0].msg || JSON.stringify(v[0]);
+                    return JSON.stringify(v);
+                }
+                const errMsg = toErrStr(data.message || data.error || data.detail) || '알 수 없는 오류';
+                if (data.success) {
+                    alert(data.message || ids.length + '건 삭제됨');
+                    load();
+                } else {
+                    alert('삭제 실패: ' + errMsg);
+                }
+            } catch (e) {
+                alert('삭제 요청 실패: ' + e.message);
+            }
+        }
+
+        function computeSymbolPnlFromTradeSets(list) {
+            const bySymbol = {};
+            list.forEach(t => {
+                const sym = t.symbol || '-';
+                const pnl = (t.pnl != null && !isNaN(t.pnl)) ? t.pnl : 0;
+                const pct = (t.pnl_percent != null && !isNaN(t.pnl_percent)) ? t.pnl_percent : null;
+                if (!bySymbol[sym]) bySymbol[sym] = { symbol: sym, pnl: 0, pnl_percent: null };
+                bySymbol[sym].pnl += pnl;
+                if (pct != null) bySymbol[sym].pnl_percent = pct;
+            });
+            return Object.values(bySymbol).filter(x => x.pnl !== 0 || x.pnl_percent != null).sort((a, b) => (b.pnl || 0) - (a.pnl || 0));
+        }
+
+        function renderSymbolPnlSummary(summary) {
+            const wrap = document.getElementById('symbol-pnl-summary');
+            const listEl = document.getElementById('symbol-pnl-list');
+            if (!summary || summary.length === 0) {
+                wrap.style.display = 'none';
+                return;
+            }
+            wrap.style.display = 'block';
+            listEl.innerHTML = summary.map(s => {
+                const pnlVal = (s.pnl != null && !isNaN(s.pnl)) ? s.pnl : null;
+                const pctVal = (s.pnl_percent != null && !isNaN(s.pnl_percent)) ? s.pnl_percent : null;
+                const pnlStr = pnlVal != null ? '$' + (pnlVal >= 0 ? '+' : '') + Number(pnlVal).toFixed(2) : '';
+                const pctStr = pctVal != null ? (pctVal >= 0 ? '+' : '') + Number(pctVal).toFixed(2) + '%' : '';
+                const cls = (pnlVal != null ? pnlVal : pctVal) >= 0 ? 'positive' : 'negative';
+                return '<div class="symbol-pnl-item"><span class="sym">' + s.symbol + '</span><span class="pnl ' + cls + '">' + [pnlStr, pctStr].filter(Boolean).join(' ') + '</span></div>';
+            }).join('');
+        }
+
+        function setPeriodPreset(period) {
+            const now = new Date();
+            let from, to;
+            if (period === 'today') {
+                from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0);
+                to = now;
+            } else if (period === '1w') {
+                from = new Date(now);
+                from.setDate(from.getDate() - 7);
+                to = now;
+            } else if (period === '1m') {
+                from = new Date(now);
+                from.setMonth(from.getMonth() - 1);
+                to = now;
+            } else return;
+            const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            document.getElementById('filter-from').value = fmt(from);
+            document.getElementById('filter-to').value = fmt(to);
+        }
+
+        document.getElementById('btn-load').addEventListener('click', load);
+        document.querySelectorAll('.btn-quick').forEach(btn => {
+            btn.addEventListener('click', () => { setPeriodPreset(btn.dataset.period); load(); });
+        });
+        load();
+    </script>
+</body>
+</html>
