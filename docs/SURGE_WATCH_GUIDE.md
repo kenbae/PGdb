@@ -109,6 +109,19 @@ python surge_watch.py --analyze-day 2026-08-19 --symbol BTCUSDT
 
 대시보드에는 데이터 레이어 용도, 지표 사전, 실시간 점수/플래그, 경보 이력이 포함됩니다.
 
+### 외부 PC에서 "연결이 거부됨" 나올 때
+
+서버는 `0.0.0.0:8003` 으로 listen 합니다. 거부는 대개 **Windows 방화벽**입니다.
+
+1. **급등 감시가 실행 중인지** Process Manager에서 확인 (또는 `python surge_watch_api.py --port 8003 --collect`)
+2. **관리자 권한**으로 `setup_firewall.bat` 실행 → **8003**  inbound 허용
+3. 같은 LAN에서 `http://[서버PC_IP]:8003` 접속 (`ipconfig`로 IPv4 확인)
+4. PowerShell에서 서버 PC로 확인:
+   ```powershell
+   Test-NetConnection -ComputerName [서버IP] -Port 8003
+   ```
+   `TcpTestSucceeded : False` 이면 방화벽/실행 여부 문제입니다.
+
 ### crontab 예시
 
 ```cron
