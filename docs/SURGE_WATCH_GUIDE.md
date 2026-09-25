@@ -82,18 +82,32 @@
 ### 실행 방법
 
 ```bash
-# 1회 수집 (cron 권장)
+# 웹 대시보드 + 백그라운드 수집 + 텔레그램 (권장)
+python surge_watch_api.py --port 8003 --collect
+# → http://localhost:8003
+
+# Process Manager에서 "급등 감시" 시작 버튼으로도 동일
+
+# CLI 1회 수집 (cron 권장)
 python surge_watch.py --once
 
 # 수집만 (텔레그램 없이)
 python surge_watch.py --once --no-telegram
 
-# 30초 폴링 루프
+# 30초 폴링 루프 (CLI)
 python surge_watch.py --loop
 
 # 로컬 DB 일자 요약
 python surge_watch.py --analyze-day 2026-08-19 --symbol BTCUSDT
 ```
+
+### Process Manager
+
+1. `python process_manager.py` 실행 후 웹에서 **급등 감시** 카드 시작
+2. 카드의 포트 링크(`http://localhost:8003`)로 대시보드 접속
+3. 경보 발생 시 `config.yaml` 텔레그램으로 SETUP/TRIGGER/SQUEEZE 전송
+
+대시보드에는 데이터 레이어 용도, 지표 사전, 실시간 점수/플래그, 경보 이력이 포함됩니다.
 
 ### crontab 예시
 

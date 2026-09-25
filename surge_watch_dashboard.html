@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BTCUSDT.P 급등 감시</title>
+  <style>
+    :root {
+      --bg: #0b0e11;
+      --panel: #1e2329;
+      --panel2: #161a1e;
+      --border: #2b3139;
+      --text: #eaecef;
+      --muted: #848e9c;
+      --green: #0ecb81;
+      --red: #f6465d;
+      --yellow: #f0b90b;
+      --blue: #1e80ff;
+      --orange: #ff8a3d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans KR", system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1a2330 0%, var(--bg) 55%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(30, 35, 41, 0.85);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .brand { display: flex; flex-direction: column; gap: 2px; }
+    .brand h1 { margin: 0; font-size: 1.25rem; letter-spacing: 0.02em; }
+    .brand p { margin: 0; color: var(--muted); font-size: 0.85rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button {
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    button:hover { border-color: var(--yellow); }
+    button.primary { background: rgba(240,185,11,0.15); border-color: rgba(240,185,11,0.45); color: #ffe7a0; }
+    button.danger { background: rgba(246,70,93,0.12); border-color: rgba(246,70,93,0.4); color: #ffc2cb; }
+    button.ok { background: rgba(14,203,129,0.12); border-color: rgba(14,203,129,0.4); color: #b9ffe0; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .pill.on { color: #b9ffe0; border-color: rgba(14,203,129,0.4); background: rgba(14,203,129,0.1); }
+    .pill.off { color: #c7ccd4; }
+    .pill.warn { color: #ffe7a0; border-color: rgba(240,185,11,0.4); background: rgba(240,185,11,0.1); }
+    .pill.hot { color: #ffc2cb; border-color: rgba(246,70,93,0.45); background: rgba(246,70,93,0.12); }
+    main { max-width: 1180px; margin: 0 auto; padding: 20px; display: grid; gap: 16px; }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      color: #d6dae1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .score-box {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .score-num {
+      font-size: 3.4rem;
+      font-weight: 700;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .price {
+      font-size: 1.7rem;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+    }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    .grid-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 1000px) { .grid-metrics { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 560px) { .grid-metrics { grid-template-columns: 1fr; } }
+    .metric {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      min-height: 96px;
+    }
+    .metric .label { color: var(--muted); font-size: 0.75rem; margin-bottom: 6px; }
+    .metric .value {
+      font-size: 1.15rem;
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 6px;
+    }
+    .metric .hint { color: var(--muted); font-size: 0.72rem; line-height: 1.35; }
+    .pos { color: var(--green); }
+    .neg { color: var(--red); }
+    .layers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    @media (max-width: 800px) { .layers { grid-template-columns: 1fr; } }
+    .layer {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .layer h3 { margin: 0 0 6px; font-size: 0.9rem; }
+    .layer .purpose { color: #cfd5dd; font-size: 0.82rem; margin-bottom: 8px; }
+    .tag {
+      display: inline-block;
+      margin: 2px 4px 2px 0;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(30,128,255,0.12);
+      border: 1px solid rgba(30,128,255,0.28);
+      color: #9ec5ff;
+      font-size: 0.7rem;
+    }
+    .glossary { display: grid; gap: 8px; }
+    .g-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: var(--panel2);
+    }
+    .g-item strong { display: block; margin-bottom: 4px; }
+    .g-item span { color: var(--muted); font-size: 0.8rem; display: block; line-height: 1.4; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th, td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    .flags { font-size: 0.75rem; color: #c7ccd4; word-break: break-word; }
+    .toast {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      background: #1e2329;
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: 10px;
+      display: none;
+      z-index: 50;
+      max-width: 360px;
+    }
+    .spark {
+      height: 56px;
+      width: 100%;
+      display: block;
+    }
+    .level-SETUP { color: var(--yellow); }
+    .level-TRIGGER { color: var(--orange); }
+    .level-SQUEEZE { color: var(--red); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>BTCUSDT.P 급등 감시</h1>
+      <p>SETUP → TRIGGER → SQUEEZE · 로컬 저장 · 텔레그램 경보</p>
+    </div>
+    <div class="actions">
+      <span id="pillCollector" class="pill off">수집기 —</span>
+      <span id="pillTelegram" class="pill off">텔레그램 —</span>
+      <span id="pillClock" class="pill">—</span>
+      <button class="primary" onclick="collectOnce()">지금 수집</button>
+      <button class="ok" onclick="startCollector()">수집 시작</button>
+      <button class="danger" onclick="stopCollector()">수집 중지</button>
+      <button onclick="testTelegram()">텔레그램 테스트</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>무엇을 하는 도구인가?</h2>
+      <p id="purposeSummary" class="muted" style="margin:0 0 8px; line-height:1.5;"></p>
+      <p id="purposeCase" style="margin:0; color:#d0d5dc; font-size:0.88rem; line-height:1.5;"></p>
+    </section>
+
+    <section class="hero">
+      <div class="card">
+        <h2>
+          <span>실시간 상태</span>
+          <span id="levelBadge" class="pill">IDLE</span>
+        </h2>
+        <div class="score-box">
+          <div>
+            <div class="muted">위험 점수</div>
+            <div id="scoreNum" class="score-num">—</div>
+            <div class="muted" id="scoreHint">40 SETUP · 60 TRIGGER · 75 SQUEEZE</div>
+          </div>
+          <div style="text-align:right">
+            <div class="muted" id="symbolLabel">BTCUSDT.P</div>
+            <div id="markPrice" class="price">—</div>
+            <div class="muted" id="tsLabel">스냅샷 없음</div>
+          </div>
+        </div>
+        <div style="margin-top:14px">
+          <svg id="spark" class="spark" viewBox="0 0 300 56" preserveAspectRatio="none"></svg>
+          <div class="muted">최근 마크가격 추이 (로컬 DB)</div>
+        </div>
+        <div id="alertFlags" class="flags" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <h2>경보 레벨 읽는 법</h2>
+        <div class="glossary">
+          <div class="g-item">
+            <strong class="level-SETUP">SETUP (연료)</strong>
+            <span>음수 펀딩·숏 과밀처럼 “스퀴즈에 잘 터지는 상태”. 아직 급등은 아님.</span>
+          </div>
+          <div class="g-item">
+            <strong class="level-TRIGGER">TRIGGER (발화)</strong>
+            <span>1~15분 수익률·거래량 이상치. 급등의 첫 수분. 텔레그램 전송.</span>
+          </div>
+          <div class="g-item">
+            <strong class="level-SQUEEZE">SQUEEZE (확정)</strong>
+            <span>가격 상승 + OI 감소 등 숏커버 패턴이 겹칠 때. 최고 우선 알림.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>핵심 지표 <span class="muted">값을 누르지 말고, 아래 설명과 함께 보세요</span></h2>
+      <div id="metrics" class="grid-metrics"></div>
+    </section>
+
+    <section class="card">
+      <h2>데이터 레이어와 용도</h2>
+      <div id="layers" class="layers"></div>
+    </section>
+
+    <section class="card">
+      <h2>지표 사전</h2>
+      <div id="glossary" class="glossary"></div>
+    </section>
+
+    <section class="card">
+      <h2>최근 경보 이력</h2>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>시각</th>
+              <th>심볼</th>
+              <th>레벨</th>
+              <th>점수</th>
+              <th>TG</th>
+            </tr>
+          </thead>
+          <tbody id="alertsBody">
+            <tr><td colspan="5" class="muted">이력 없음</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const API = '';
+    let meta = null;
+
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 3200);
+    }
+
+    function fmt(n, d=2) {
+      if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
+      return Number(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
+    }
+    function fmtPct(n, d=2) {
+      if (n === null || n === undefined) return '—';
+      const v = Number(n);
+      const s = (v >= 0 ? '+' : '') + v.toFixed(d) + '%';
+      return s;
+    }
+    function clsPct(n) {
+      if (n === null || n === undefined) return '';
+      return Number(n) >= 0 ? 'pos' : 'neg';
+    }
+    async function jget(path) {
+      const r = await fetch(API + path);
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
+    async function jpost(path) {
+      const r = await fetch(API + path, { method: 'POST' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || JSON.stringify(data));
+      return data;
+    }
+
+    function renderPurpose() {
+      document.getElementById('purposeSummary').textContent = meta.purpose.summary;
+      document.getElementById('purposeCase').textContent = meta.purpose.case_20260819;
+    }
+
+    function renderLayers() {
+      const root = document.getElementById('layers');
+      root.innerHTML = meta.data_layers.map(l => `
+        <div class="layer">
+          <h3>${l.name}</h3>
+          <div class="purpose"><b>용도:</b> ${l.purpose}</div>
+          <div class="muted" style="margin-bottom:8px; font-size:0.8rem; line-height:1.4">${l.why}</div>
+          <div>${(l.sources || []).map(s => `<span class="tag">${s}</span>`).join('')}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderGlossary() {
+      const root = document.getElementById('glossary');
+      root.innerHTML = meta.indicators.map(i => `
+        <div class="g-item">
+          <strong>${i.name} <span class="muted">(${i.key})</span></strong>
+          <span>${i.plain}</span>
+          <span style="color:#cfd5dd; margin-top:4px">${i.how_to_read}</span>
+        </div>
+      `).join('');
+    }
+
+    function indicatorHint(key) {
+      const i = (meta.indicators || []).find(x => x.key === key);
+      return i ? i.how_to_read : '';
+    }
+
+    function renderMetrics(snap) {
+      const items = [
+        { key: 'funding_rate', label: '펀딩비', value: snap ? Number(snap.funding_rate).toFixed(6) : '—', cls: snap && snap.funding_rate < 0 ? 'neg' : 'pos' },
+        { key: 'open_interest', label: 'OI (계약)', value: snap ? fmt(snap.open_interest, 1) : '—' },
+        { key: 'long_short_ratio', label: 'L/S 비율', value: snap && snap.long_short_ratio != null ? fmt(snap.long_short_ratio, 3) : '—' },
+        { key: 'short_account', label: '숏 계정 비중', value: snap && snap.short_account != null ? fmt(snap.short_account, 3) : '—' },
+        { key: 'ret_1m_pct', label: '1분 수익률', value: snap ? fmtPct(snap.ret_1m_pct) : '—', cls: snap ? clsPct(snap.ret_1m_pct) : '' },
+        { key: 'ret_5m_pct', label: '5분 수익률', value: snap ? fmtPct(snap.ret_5m_pct) : '—', cls: snap ? clsPct(snap.ret_5m_pct) : '' },
+        { key: 'ret_15m_pct', label: '15분 수익률', value: snap ? fmtPct(snap.ret_15m_pct) : '—', cls: snap ? clsPct(snap.ret_15m_pct) : '' },
+        { key: 'volume_z_5m', label: '거래량 Z(5m)', value: snap ? fmt(snap.volume_z_5m, 2) : '—' },
+        { key: 'premium_bps', label: '프리미엄(bps)', value: snap ? fmt(snap.premium_bps, 1) : '—', cls: snap ? clsPct(snap.premium_bps) : '' },
+        { key: 'price_change_24h_pct', label: '24h 변동', value: snap ? fmtPct(snap.price_change_24h_pct) : '—', cls: snap ? clsPct(snap.price_change_24h_pct) : '' },
+        { key: 'top_ls_ratio', label: '탑트레이더 L/S', value: snap && snap.top_ls_ratio != null ? fmt(snap.top_ls_ratio, 3) : '—' },
+        { key: 'risk_score', label: '위험 점수', value: snap ? String(snap.risk_score) : '—' },
+      ];
+      document.getElementById('metrics').innerHTML = items.map(it => `
+        <div class="metric">
+          <div class="label">${it.label}</div>
+          <div class="value ${it.cls || ''}">${it.value}</div>
+          <div class="hint">${indicatorHint(it.key)}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderSpark(rows) {
+      const svg = document.getElementById('spark');
+      const prices = (rows || []).map(r => Number(r.mark_price)).filter(x => !Number.isNaN(x));
+      if (prices.length < 2) {
+        svg.innerHTML = '';
+        return;
+      }
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      const w = 300, h = 56, pad = 4;
+      const pts = prices.map((p, i) => {
+        const x = pad + (i / (prices.length - 1)) * (w - pad * 2);
+        const y = pad + (1 - ((p - min) / (max - min || 1))) * (h - pad * 2);
+        return `${x},${y}`;
+      }).join(' ');
+      const up = prices[prices.length - 1] >= prices[0];
+      svg.innerHTML = `<polyline fill="none" stroke="${up ? '#0ecb81' : '#f6465d'}" stroke-width="2" points="${pts}" />`;
+    }
+
+    function renderAlerts(alerts) {
+      const body = document.getElementById('alertsBody');
+      if (!alerts || !alerts.length) {
+        body.innerHTML = '<tr><td colspan="5" class="muted">이력 없음</td></tr>';
+        return;
+      }
+      body.innerHTML = alerts.map(a => `
+        <tr>
+          <td>${(a.ts || '').replace('T', ' ').slice(0, 19)}</td>
+          <td>${a.symbol || ''}</td>
+          <td class="level-${a.level || ''}">${a.level || ''}</td>
+          <td>${a.risk_score ?? ''}</td>
+          <td>${a.sent ? '✓' : '—'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function applyLatest(snap, status) {
+      const score = snap ? snap.risk_score : 0;
+      const level = (snap && snap.level) || (score >= 75 ? 'SQUEEZE' : score >= 60 ? 'TRIGGER' : score >= 40 ? 'SETUP' : null);
+      document.getElementById('scoreNum').textContent = snap ? score : '—';
+      document.getElementById('markPrice').textContent = snap ? fmt(snap.mark_price, 2) : '—';
+      document.getElementById('symbolLabel').textContent = (snap?.symbol || meta?.symbols?.[0] || 'BTCUSDT') + '.P';
+      document.getElementById('tsLabel').textContent = snap?.ts_kst || '스냅샷 없음';
+      const badge = document.getElementById('levelBadge');
+      badge.textContent = level || 'IDLE';
+      badge.className = 'pill ' + (level === 'SQUEEZE' ? 'hot' : level === 'TRIGGER' ? 'warn' : level === 'SETUP' ? 'warn' : 'off');
+      document.getElementById('alertFlags').textContent = snap?.alerts?.length
+        ? '플래그: ' + snap.alerts.join(', ')
+        : '플래그: 없음 (정상 구간)';
+      renderMetrics(snap);
+
+      const col = status?.collector || {};
+      const pc = document.getElementById('pillCollector');
+      pc.textContent = col.running ? `수집기 ON (${col.poll_sec || 30}s)` : '수집기 OFF';
+      pc.className = 'pill ' + (col.running ? 'on' : 'off');
+      const pt = document.getElementById('pillTelegram');
+      const tgOk = status?.telegram_configured;
+      pt.textContent = tgOk ? (col.telegram ? '텔레그램 ON' : '텔레그램 대기') : '텔레그램 미설정';
+      pt.className = 'pill ' + (tgOk ? 'on' : 'off');
+      document.getElementById('pillClock').textContent = status?.now_kst || '';
+    }
+
+    async function refresh() {
+      try {
+        if (!meta) {
+          meta = await jget('/api/meta');
+          renderPurpose();
+          renderLayers();
+          renderGlossary();
+        }
+        const [status, history, alerts] = await Promise.all([
+          jget('/api/status'),
+          jget('/api/history?limit=80'),
+          jget('/api/alerts?limit=30'),
+        ]);
+        applyLatest(status.latest && !status.latest.error ? status.latest : null, status);
+        renderSpark(history.rows || []);
+        renderAlerts(alerts.alerts || []);
+      } catch (e) {
+        console.error(e);
+        toast('새로고침 실패: ' + e.message);
+      }
+    }
+
+    async function collectOnce() {
+      try {
+        toast('수집 중…');
+        await jpost('/api/collect-once?telegram=true');
+        toast('수집 완료');
+        await refresh();
+      } catch (e) { toast('실패: ' + e.message); }
+    }
+    async function startCollector() {
+      try {
+        await jpost('/api/collector/start?telegram=true');
+        toast('수집기 시작');
+        await refresh();
+      } catch (e) { toast('실패: ' + e.message); }
+    }
+    async function stopCollector() {
+      try {
+        await jpost('/api/collector/stop');
+        toast('수집기 중지');
+        await refresh();
+      } catch (e) { toast('실패: ' + e.message); }
+    }
+    async function testTelegram() {
+      try {
+        await jpost('/api/test-telegram');
+        toast('텔레그램 테스트 전송됨');
+      } catch (e) { toast('실패: ' + e.message); }
+    }
+
+    refresh();
+    setInterval(refresh, 15000);
+  </script>
+</body>
+</html>

@@ -263,6 +263,16 @@ PROCESS_CONFIG = {
         "description": "EMA 골든/데드 크로스 스캐너",
         "symbol_option": False
     },
+    "surge_watch": {
+        "name": "급등 감시",
+        "command": ["python", "-u", "surge_watch_api.py", "--port", "8003", "--collect"],
+        "cwd": ".",
+        "env": {},
+        "icon": "🚨",
+        "description": "BTCUSDT.P SETUP/TRIGGER/SQUEEZE 감시 웹 + 텔레그램 (포트 8003)",
+        "symbol_option": False,
+        "port": 8003
+    },
     "backfill": {
         "name": "데이터 백필",
         "command": ["python", "backfill_binance_vision.py"],
@@ -396,6 +406,7 @@ HTTP_LOG_PATTERNS = [
 LOG_FILTER_ENABLED = {
     "dashboard": True,      # 대시보드는 HTTP 로그 필터링
     "ema_scanner": False,
+    "surge_watch": True,
     "backfill": False,
     "pipeline": False,
     "outcomes": False,

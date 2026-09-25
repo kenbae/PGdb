@@ -31,7 +31,9 @@ PGdb/
 │   ├── run_pipeline.py            # 위 4개 통합 실행
 │   ├── backfill_binance_vision.py # 과거 데이터 수집
 │   ├── ema_scanner.py             # 실시간 EMA 크로스 스캐닝
-│   └── surge_watch.py             # BTCUSDT.P 급등 SETUP/TRIGGER 감시
+│   ├── surge_watch.py             # BTCUSDT.P 급등 SETUP/TRIGGER 감시 (CLI)
+│   ├── surge_watch_api.py         # 급등 감시 웹+수집기 (포트 8003)
+│   └── surge_watch_dashboard.html # 급등 감시 대시보드 UI
 │
 ├── [보고서/알림]
 │   ├── run_report.py              # 전략 성과 리포트
@@ -211,11 +213,14 @@ python ema_scanner.py --llm-alert
 ### 4.3.1 급등 사전 감시 (BTCUSDT.P)
 
 ```bash
-# 1회 스냅샷 → data/surge_watch.db + (옵션) 텔레그램
-python surge_watch.py --once
+# 웹 UI + 수집기 + 텔레그램 (포트 8003)
+python surge_watch_api.py --port 8003 --collect
 
-# 연속 폴링
-python surge_watch.py --loop
+# 또는 Process Manager → "급등 감시" 시작
+# http://localhost:8003
+
+# CLI 1회 스냅샷
+python surge_watch.py --once
 
 # 상세: docs/SURGE_WATCH_GUIDE.md
 ```
@@ -548,6 +553,8 @@ http://[로컬IP]:8000
 | run_pipeline.py | 데이터 파이프라인 통합 실행 |
 | run_ingest.py | 바이낸스 선물 OHLCV 데이터 수집 |
 | ema_scanner.py | 실시간 EMA 크로스 스캐닝 |
+| surge_watch.py | BTCUSDT.P 급등 SETUP/TRIGGER 로컬 감시 (CLI) |
+| surge_watch_api.py | 급등 감시 웹 대시보드 + 수집기 (포트 8003) |
 | process_manager.py | 프로세스 관리 웹 UI |
 | dashboard_api_modular.py | 트레이딩 대시보드 |
 | backtest_api.py | 백테스트 서버 |

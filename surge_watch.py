@@ -117,6 +117,237 @@ def fmt_kst(dt: datetime) -> str:
 
 
 # ---------------------------
+# Glossary / data layers (web UI)
+# ---------------------------
+PURPOSE = {
+    "title": "BTCUSDT.P 급등 사전 감시",
+    "summary": (
+        "완벽한 예측이 아니라, 숏스퀴즈에 취약한 장세(SETUP)를 상시 감시하다가 "
+        "급등 첫 수분(TRIGGER)과 숏커버 확정(SQUEEZE)을 로컬에 기록하고 텔레그램으로 알립니다."
+    ),
+    "case_20260819": (
+        "2026-08-19: 미 재무부 장기채 바이백 확대 발표 → 금리 급락 → "
+        "이미 쌓여 있던 숏/음수 펀딩이 강제청산 캐스케이드로 증폭."
+    ),
+}
+
+DATA_LAYERS = [
+    {
+        "id": "price_volume",
+        "name": "가격·거래량 레이어",
+        "purpose": "발화(TRIGGER) 감지 — 급등이 ‘시작’되는 순간을 수분 단위로 포착",
+        "sources": ["Binance Futures 1m klines", "24h ticker"],
+        "metrics": ["ret_1m_pct", "ret_5m_pct", "ret_15m_pct", "volume_z_5m", "price_change_24h_pct"],
+        "why": "매크로 뉴스는 예측하기 어렵지만, 첫 분봉 스파이크와 거래량 이상치는 조기 경보로 쓸 수 있습니다.",
+    },
+    {
+        "id": "derivatives_positioning",
+        "name": "파생 포지셔닝 레이어",
+        "purpose": "연료(SETUP) 감지 — 숏이 과밀해 ‘스퀴즈에 취약한지’ 사전 점검",
+        "sources": ["funding rate", "open interest", "global L/S account ratio", "top trader L/S"],
+        "metrics": ["funding_rate", "open_interest", "long_short_ratio", "short_account", "top_ls_ratio"],
+        "why": "8/19처럼 음수 펀딩·숏 우세가 수주 지속되면, 작은 촉매에도 강제청산이 연쇄됩니다.",
+    },
+    {
+        "id": "squeeze_confirm",
+        "name": "스퀴즈 확정 레이어",
+        "purpose": "상승이 ‘신규 롱’인지 ‘숏커버’인지 구분",
+        "sources": ["OI 5m history", "mark vs index premium"],
+        "metrics": ["oi_drop_while_up", "premium_bps", "risk_score"],
+        "why": "가격↑ + OI↓ 는 숏커버/청산 주도 가능성이 높고, 추격보다 리스크 관리가 우선입니다.",
+    },
+    {
+        "id": "alert_delivery",
+        "name": "알림·저장 레이어",
+        "purpose": "로컬 이력 보존 + 텔레그램 즉시 전달",
+        "sources": ["SQLite data/surge_watch.db", "Telegram Bot API"],
+        "metrics": ["surge_snapshots", "surge_alerts"],
+        "why": "웹에서 보고, 자리비움 시에도 텔레그램으로 SETUP/TRIGGER/SQUEEZE를 받습니다.",
+    },
+]
+
+INDICATORS = [
+    {
+        "key": "risk_score",
+        "name": "위험 점수 (0–100)",
+        "plain": "SETUP·TRIGGER·SQUEEZE 조건을 합산한 종합 점수입니다.",
+        "how_to_read": "40↑ SETUP, 60↑ TRIGGER, 75↑ SQUEEZE. 높을수록 급등/스퀴즈 징후가 겹친 상태.",
+        "layer": "squeeze_confirm",
+    },
+    {
+        "key": "mark_price",
+        "name": "마크 가격",
+        "plain": "청산·펀딩 정산에 쓰이는 공정가에 가까운 가격입니다.",
+        "how_to_read": "체결가와 크게 벌어지면 변동성이 크거나 유동성이 얇다는 신호일 수 있습니다.",
+        "layer": "price_volume",
+    },
+    {
+        "key": "funding_rate",
+        "name": "펀딩비",
+        "plain": "롱·숏이 서로 지불하는 비용입니다. 음수면 숏이 롱에게 받습니다.",
+        "how_to_read": "오래 음수면 숏 과밀(SETUP). 급등 후 한 사이클 만에 크게 플러스면 과열 경계.",
+        "layer": "derivatives_positioning",
+    },
+    {
+        "key": "open_interest",
+        "name": "미결제약정 (OI)",
+        "plain": "아직 청산되지 않은 선물 포지션 규모입니다.",
+        "how_to_read": "가격↑+OI↓ → 숏커버 가능성. 가격↑+OI↑ → 신규 레버리지 유입.",
+        "layer": "derivatives_positioning",
+    },
+    {
+        "key": "long_short_ratio",
+        "name": "롱/숏 계정 비율",
+        "plain": "계정 수 기준 롱÷숏입니다. 1 미만이면 숏 계정이 더 많습니다.",
+        "how_to_read": "1보다 많이 낮고 지속되면 숏 군중(SETUP)으로 봅니다.",
+        "layer": "derivatives_positioning",
+    },
+    {
+        "key": "short_account",
+        "name": "숏 계정 비중",
+        "plain": "전체 계정 중 숏을 든 비율입니다.",
+        "how_to_read": "대략 52% 이상이면 숏 과밀 SETUP으로 점수에 반영됩니다.",
+        "layer": "derivatives_positioning",
+    },
+    {
+        "key": "top_ls_ratio",
+        "name": "탑트레이더 롱/숏",
+        "plain": "대형 계정의 포지션 롱÷숏 비율입니다.",
+        "how_to_read": "소매 L/S와 괴리가 크면 스마트머니 방향 힌트가 될 수 있습니다.",
+        "layer": "derivatives_positioning",
+    },
+    {
+        "key": "ret_1m_pct",
+        "name": "1분 수익률",
+        "plain": "최근 1분 가격 변화율입니다.",
+        "how_to_read": "기본 임계 ±0.35% 이상이면 TRIGGER 후보.",
+        "layer": "price_volume",
+    },
+    {
+        "key": "ret_5m_pct",
+        "name": "5분 수익률",
+        "plain": "최근 5분 가격 변화율입니다.",
+        "how_to_read": "기본 임계 ±0.8% 이상이면 TRIGGER. 상승+OI감소와 같이 보면 SQUEEZE.",
+        "layer": "price_volume",
+    },
+    {
+        "key": "ret_15m_pct",
+        "name": "15분 수익률",
+        "plain": "최근 15분 가격 변화율입니다.",
+        "how_to_read": "기본 임계 ±1.5%. 단발성 노이즈와 실제 급등을 구분하는 데 도움.",
+        "layer": "price_volume",
+    },
+    {
+        "key": "volume_z_5m",
+        "name": "거래량 Z-Score (5분)",
+        "plain": "최근 5분 거래량이 평소보다 얼마나 이상한지(표준편차 단위)입니다.",
+        "how_to_read": "2.5 이상이면 비정상 체결 폭주. 가격 급변과 함께면 TRIGGER 강화.",
+        "layer": "price_volume",
+    },
+    {
+        "key": "premium_bps",
+        "name": "프리미엄 (bps)",
+        "plain": "마크가격이 현물지수를 몇 bp 웃도는지입니다.",
+        "how_to_read": "급등 중 프리미엄 확대는 선물 과열. 과도하면 되돌림 경계.",
+        "layer": "squeeze_confirm",
+    },
+    {
+        "key": "price_change_24h_pct",
+        "name": "24시간 변동률",
+        "plain": "지난 24시간 대비 현재가 변화입니다.",
+        "how_to_read": "배경 추세 파악용. 단독 TRIGGER는 아니지만 맥락을 줍니다.",
+        "layer": "price_volume",
+    },
+]
+
+
+def snapshot_to_dict(snap: Snapshot, thresholds: Optional[dict] = None) -> dict:
+    th = thresholds or {}
+    level = alert_level(snap.risk_score, th) if th else None
+    return {
+        "ts": snap.ts.isoformat(),
+        "ts_kst": fmt_kst(snap.ts),
+        "symbol": snap.symbol,
+        "mark_price": snap.mark_price,
+        "index_price": snap.index_price,
+        "last_price": snap.last_price,
+        "funding_rate": snap.funding_rate,
+        "next_funding_time": snap.next_funding_time,
+        "open_interest": snap.open_interest,
+        "oi_value_usdt": snap.oi_value_usdt,
+        "long_short_ratio": snap.long_short_ratio,
+        "short_account": snap.short_account,
+        "top_ls_ratio": snap.top_ls_ratio,
+        "ret_1m_pct": snap.ret_1m_pct,
+        "ret_5m_pct": snap.ret_5m_pct,
+        "ret_15m_pct": snap.ret_15m_pct,
+        "volume_1m": snap.volume_1m,
+        "volume_5m": snap.volume_5m,
+        "volume_z_5m": snap.volume_z_5m,
+        "premium_bps": snap.premium_bps,
+        "price_change_24h_pct": snap.price_change_24h_pct,
+        "quote_volume_24h": snap.quote_volume_24h,
+        "alerts": list(snap.alerts),
+        "risk_score": snap.risk_score,
+        "level": level,
+    }
+
+
+def row_to_snapshot_dict(row: sqlite3.Row, thresholds: Optional[dict] = None) -> dict:
+    d = dict(row)
+    alerts = d.get("alerts_json")
+    try:
+        d["alerts"] = json.loads(alerts) if alerts else []
+    except Exception:
+        d["alerts"] = []
+    d.pop("alerts_json", None)
+    ts = d.get("ts")
+    if ts:
+        try:
+            dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+            d["ts_kst"] = fmt_kst(dt)
+        except Exception:
+            d["ts_kst"] = ts
+    if thresholds is not None:
+        d["level"] = alert_level(int(d.get("risk_score") or 0), thresholds)
+    return d
+
+
+def query_latest(conn: sqlite3.Connection, symbol: Optional[str] = None, thresholds: Optional[dict] = None) -> Optional[dict]:
+    conn.row_factory = sqlite3.Row
+    if symbol:
+        row = conn.execute(
+            "SELECT * FROM surge_snapshots WHERE symbol=? ORDER BY id DESC LIMIT 1",
+            (symbol,),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM surge_snapshots ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    if not row:
+        return None
+    return row_to_snapshot_dict(row, thresholds)
+
+
+def query_history(conn: sqlite3.Connection, symbol: str, limit: int = 120, thresholds: Optional[dict] = None) -> List[dict]:
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT * FROM surge_snapshots WHERE symbol=? ORDER BY id DESC LIMIT ?",
+        (symbol, limit),
+    ).fetchall()
+    return [row_to_snapshot_dict(r, thresholds) for r in reversed(rows)]
+
+
+def query_alerts(conn: sqlite3.Connection, limit: int = 50) -> List[dict]:
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT * FROM surge_alerts ORDER BY id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------
 # HTTP helpers
 # ---------------------------
 class BinanceClient:
