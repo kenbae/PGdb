@@ -204,6 +204,7 @@ async def api_status():
         "telegram_configured": _telegram_configured(),
         "latest": latest,
         "now_kst": sw.fmt_kst(sw.utc_now()),
+        "now_utc": sw.utc_now().isoformat(),
         "config_poll_sec": int(_SCFG.get("poll_sec", 30)),
     }
 

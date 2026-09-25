@@ -215,6 +215,16 @@
     .level-CASCADE { color: var(--orange); }
     .bias-up { color: var(--green); }
     .bias-down { color: var(--red); }
+    select.tz-select {
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    select.tz-select:focus { outline: none; border-color: var(--yellow); }
   </style>
 </head>
 <body>
@@ -224,6 +234,10 @@
       <p>SETUP → TRIGGER → SQUEEZE/DUMP · 로컬 저장 · 텔레그램 경보</p>
     </div>
     <div class="actions">
+      <label class="pill" style="gap:8px">
+        <span>시간대</span>
+        <select id="tzSelect" class="tz-select" onchange="onTimezoneChange()"></select>
+      </label>
       <span id="pillCollector" class="pill off">수집기 —</span>
       <span id="pillTelegram" class="pill off">텔레그램 —</span>
       <span id="pillClock" class="pill">—</span>
@@ -343,6 +357,104 @@
     let candleChart = null;
     let candleSeries = null;
     let candleSymbol = 'BTCUSDT';
+    let lastStatus = null;
+    let lastAlerts = [];
+
+    const TZ_OPTIONS = [
+      { id: 'UTC+9', offset: 9, label: 'UTC+9 (KST)' },
+      { id: 'UTC+0', offset: 0, label: 'UTC+0' },
+      { id: 'UTC+1', offset: 1, label: 'UTC+1' },
+      { id: 'UTC+8', offset: 8, label: 'UTC+8' },
+      { id: 'UTC-5', offset: -5, label: 'UTC-5 (EST)' },
+      { id: 'UTC-8', offset: -8, label: 'UTC-8 (PST)' },
+      { id: 'local', offset: null, label: '브라우저 로컬' },
+    ];
+    const TZ_STORAGE_KEY = 'surge_watch_tz';
+
+    function getSelectedTz() {
+      const id = localStorage.getItem(TZ_STORAGE_KEY) || 'UTC+9';
+      return TZ_OPTIONS.find(t => t.id === id) || TZ_OPTIONS[0];
+    }
+
+    function initTimezoneSelect() {
+      const sel = document.getElementById('tzSelect');
+      if (!sel) return;
+      const cur = getSelectedTz().id;
+      sel.innerHTML = TZ_OPTIONS.map(t =>
+        `<option value="${t.id}" ${t.id === cur ? 'selected' : ''}>${t.label}</option>`
+      ).join('');
+    }
+
+    function onTimezoneChange() {
+      const sel = document.getElementById('tzSelect');
+      localStorage.setItem(TZ_STORAGE_KEY, sel.value);
+      applyTimezoneToUi();
+      if (candleChart) applyChartTimezone();
+      refreshCandles();
+      toast(`시간대: ${getSelectedTz().label}`);
+    }
+
+    function resolveOffsetHours() {
+      const tz = getSelectedTz();
+      if (tz.id === 'local' || tz.offset === null) {
+        return -new Date().getTimezoneOffset() / 60;
+      }
+      return tz.offset;
+    }
+
+    function tzLabelShort() {
+      const tz = getSelectedTz();
+      if (tz.id === 'local') {
+        const off = resolveOffsetHours();
+        const sign = off >= 0 ? '+' : '';
+        return `UTC${sign}${off}`;
+      }
+      return tz.id;
+    }
+
+    function parseToDate(input) {
+      if (!input) return null;
+      if (input instanceof Date) return input;
+      if (typeof input === 'number') {
+        // unix sec vs ms
+        return new Date(input < 1e12 ? input * 1000 : input);
+      }
+      const s = String(input).trim();
+      // already ISO
+      const d = new Date(s);
+      if (!Number.isNaN(d.getTime())) return d;
+      return null;
+    }
+
+    function formatInSelectedTz(input, withSeconds = true) {
+      const d = parseToDate(input);
+      if (!d) return '—';
+      const offH = resolveOffsetHours();
+      const shifted = new Date(d.getTime() + offH * 3600 * 1000);
+      // use UTC getters on shifted instant to print wall clock of target offset
+      const y = shifted.getUTCFullYear();
+      const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(shifted.getUTCDate()).padStart(2, '0');
+      const hh = String(shifted.getUTCHours()).padStart(2, '0');
+      const mm = String(shifted.getUTCMinutes()).padStart(2, '0');
+      const ss = String(shifted.getUTCSeconds()).padStart(2, '0');
+      const body = withSeconds
+        ? `${y}-${m}-${day} ${hh}:${mm}:${ss}`
+        : `${y}-${m}-${day} ${hh}:${mm}`;
+      return `${body} ${tzLabelShort()}`;
+    }
+
+    function applyTimezoneToUi() {
+      if (lastStatus) {
+        const snap = lastStatus.latest && !lastStatus.latest.error ? lastStatus.latest : null;
+        document.getElementById('tsLabel').textContent = snap?.ts
+          ? formatInSelectedTz(snap.ts)
+          : (snap?.ts_kst || '스냅샷 없음');
+        const nowSrc = lastStatus.now_utc || lastStatus.now_kst;
+        document.getElementById('pillClock').textContent = formatInSelectedTz(nowSrc || new Date());
+      }
+      renderAlerts(lastAlerts);
+    }
 
     function toast(msg) {
       const el = document.getElementById('toast');
@@ -377,6 +489,18 @@
       return data;
     }
 
+    function applyChartTimezone() {
+      if (!candleChart) return;
+      candleChart.applyOptions({
+        localization: {
+          timeFormatter: (time) => {
+            // time is unix sec UTC
+            return formatInSelectedTz(time, false);
+          },
+        },
+      });
+    }
+
     function ensureCandleChart() {
       const el = document.getElementById('candleChart');
       if (!el || candleChart || typeof LightweightCharts === 'undefined') return;
@@ -398,6 +522,9 @@
           secondsVisible: false,
         },
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        localization: {
+          timeFormatter: (time) => formatInSelectedTz(time, false),
+        },
       });
       candleSeries = candleChart.addCandlestickSeries({
         upColor: '#0ecb81',
@@ -437,8 +564,9 @@
         }));
         candleSeries.setData(candles);
         candleChart.timeScale().fitContent();
+        applyChartTimezone();
         document.getElementById('candleCaption').textContent =
-          `${sym}.P ${candleTf} 캔들 (Binance Futures) · 최근 ${candles.length}개`;
+          `${sym}.P ${candleTf} 캔들 (Binance Futures) · 최근 ${candles.length}개 · 표시 ${tzLabelShort()}`;
       } catch (e) {
         console.error(e);
         document.getElementById('candleCaption').textContent = '캔들 로드 실패: ' + e.message;
@@ -503,14 +631,15 @@
     }
 
     function renderAlerts(alerts) {
+      lastAlerts = alerts || [];
       const body = document.getElementById('alertsBody');
-      if (!alerts || !alerts.length) {
+      if (!lastAlerts.length) {
         body.innerHTML = '<tr><td colspan="5" class="muted">이력 없음</td></tr>';
         return;
       }
-      body.innerHTML = alerts.map(a => `
+      body.innerHTML = lastAlerts.map(a => `
         <tr>
-          <td>${(a.ts || '').replace('T', ' ').slice(0, 19)}</td>
+          <td>${formatInSelectedTz(a.ts)}</td>
           <td>${a.symbol || ''}</td>
           <td class="level-${a.level || ''}">${a.level || ''}</td>
           <td>${a.risk_score ?? ''}</td>
@@ -520,6 +649,7 @@
     }
 
     function applyLatest(snap, status) {
+      lastStatus = status;
       const score = snap ? snap.risk_score : 0;
       const direction = snap?.direction || 'neutral';
       let level = snap && snap.level;
@@ -531,7 +661,9 @@
       candleSymbol = snap?.symbol || meta?.symbols?.[0] || 'BTCUSDT';
       const biasTxt = snap?.bias || ({up:'급등', down:'급락', neutral:'중립'}[direction] || '');
       document.getElementById('symbolLabel').textContent = candleSymbol + '.P' + (biasTxt ? ` · ${biasTxt}` : '');
-      document.getElementById('tsLabel').textContent = snap?.ts_kst || '스냅샷 없음';
+      document.getElementById('tsLabel').textContent = snap?.ts
+        ? formatInSelectedTz(snap.ts)
+        : '스냅샷 없음';
       const badge = document.getElementById('levelBadge');
       badge.textContent = level ? `${level}${direction !== 'neutral' ? '/' + direction : ''}` : 'IDLE';
       badge.className = 'pill ' + (
@@ -554,7 +686,8 @@
       const tgOk = status?.telegram_configured;
       pt.textContent = tgOk ? (col.telegram ? '텔레그램 ON' : '텔레그램 대기') : '텔레그램 미설정';
       pt.className = 'pill ' + (tgOk ? 'on' : 'off');
-      document.getElementById('pillClock').textContent = status?.now_kst || '';
+      const nowSrc = status?.now_utc || new Date().toISOString();
+      document.getElementById('pillClock').textContent = formatInSelectedTz(nowSrc);
     }
 
     async function refresh() {
@@ -607,6 +740,7 @@
       } catch (e) { toast('실패: ' + e.message); }
     }
 
+    initTimezoneSelect();
     refresh();
     setInterval(refresh, 15000);
   </script>
