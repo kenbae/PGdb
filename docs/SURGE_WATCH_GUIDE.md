@@ -109,7 +109,35 @@ python surge_watch.py --analyze-day 2026-08-19 --symbol BTCUSDT
 
 대시보드에는 데이터 레이어 용도, 지표 사전, 실시간 점수/플래그, 경보 이력이 포함됩니다.
 
-### 외부 PC에서 "연결이 거부됨" 나올 때
+### 서버 재부팅 시 자동 시작 (Windows)
+
+관리자 PowerShell에서 한 번만 실행:
+
+```powershell
+cd C:\Users\kenne\PGdb
+powershell -ExecutionPolicy Bypass -File .\scripts\install_surge_watch_autostart.ps1
+```
+
+- 작업 이름: `PGdbSurgeWatch`
+- 부팅/로그온 시 `scripts\start_surge_watch.bat` 실행 (`--host 0.0.0.0 --port 8003`)
+- 로그: `logs\surge_watch_autostart.log`
+- 제거: `.\scripts\uninstall_surge_watch_autostart.ps1`
+
+확인:
+```powershell
+Get-ScheduledTask -TaskName PGdbSurgeWatch
+netstat -an | findstr 8003
+```
+`0.0.0.0:8003 LISTENING` 이어야 LAN/DDNS 접속이 됩니다.
+
+### Linux (systemd)
+
+```bash
+# paths in scripts/surge-watch.service 를 실제 경로에 맞게 수정 후
+sudo cp scripts/surge-watch.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now surge-watch
+```
 
 서버는 `0.0.0.0:8003` 으로 listen 합니다. 거부는 대개 **Windows 방화벽**입니다.
 
