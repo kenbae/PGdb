@@ -265,11 +265,11 @@ PROCESS_CONFIG = {
     },
     "surge_watch": {
         "name": "급등 감시",
-        "command": ["python", "-u", "surge_watch_api.py", "--port", "8003", "--collect"],
+        "command": ["python", "-u", "surge_watch_api.py", "--host", "0.0.0.0", "--port", "8003", "--collect"],
         "cwd": ".",
         "env": {},
         "icon": "🚨",
-        "description": "BTCUSDT.P 급등·급락 SETUP/TRIGGER/SQUEEZE·DUMP 감시 웹 + 텔레그램 (포트 8003)",
+        "description": "BTCUSDT.P 급등·급락 SETUP/TRIGGER/SQUEEZE·DUMP 감시 웹 + 텔레그램 (포트 8003, 외부접속용 0.0.0.0)",
         "symbol_option": False,
         "port": 8003
     },

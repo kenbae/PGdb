@@ -356,11 +356,17 @@ def main():
 
     print("=" * 60)
     print("BTCUSDT.P Surge Watch Dashboard")
-    print(f"  UI:        http://localhost:{args.port}")
-    print(f"  API docs:  http://localhost:{args.port}/docs")
+    print(f"  Bind:      http://{args.host}:{args.port}")
+    print(f"  Local:     http://127.0.0.1:{args.port}")
+    print(f"  LAN/WAN:   http://<PC_IP>:{args.port}  (requires host=0.0.0.0)")
+    print(f"  API docs:  http://127.0.0.1:{args.port}/docs")
     print(f"  Collector: {'ON' if do_collect else 'OFF'} | Telegram: {'ON' if send_tg else 'OFF'}")
     print(f"  poll_sec:  {_COLLECTOR_STATUS.get('poll_sec')}")
     print("=" * 60)
+
+    if args.host in ("127.0.0.1", "localhost"):
+        print("WARNING: host is localhost-only. LAN/external access will fail.")
+        print("         Use --host 0.0.0.0 for 192.168.x.x / DDNS access.\n")
 
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
