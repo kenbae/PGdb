@@ -29,6 +29,10 @@
 # ============================================================
 # 방법 3: 각 단계별로 다른 시간에 실행
 # ============================================================
+# BTCUSDT.P 급등 사전 감시 (매분 스냅샷 → SQLite + Telegram)
+# 상세: docs/SURGE_WATCH_GUIDE.md
+* * * * * cd /path/to/your/project && /usr/bin/python3 surge_watch.py --once >> logs/surge_watch.log 2>&1
+
 # 매 시간 1분: 데이터 수집
 1 * * * * cd /path/to/your/project && /usr/bin/python3 run_ingest.py >> logs/ingest.log 2>&1
 

@@ -30,12 +30,14 @@ PGdb/
 │   ├── run_outcomes.py            # 신호 결과 평가
 │   ├── run_pipeline.py            # 위 4개 통합 실행
 │   ├── backfill_binance_vision.py # 과거 데이터 수집
-│   └── ema_scanner.py             # 실시간 EMA 크로스 스캐닝
+│   ├── ema_scanner.py             # 실시간 EMA 크로스 스캐닝
+│   └── surge_watch.py             # BTCUSDT.P 급등 SETUP/TRIGGER 감시
 │
 ├── [보고서/알림]
 │   ├── run_report.py              # 전략 성과 리포트
 │   ├── run_llm_reports.py         # AI 상세 리포트
-│   └── run_notify.py              # 텔레그램 실시간 알림
+│   ├── run_notify.py              # 텔레그램 실시간 알림
+│   └── docs/SURGE_WATCH_GUIDE.md  # 2026-08-19 급등 복기 + 감시 가이드
 │
 ├── [웹 서버]
 │   ├── dashboard_api.py           # 대시보드 (포트 8001)
@@ -204,6 +206,18 @@ python ema_scanner.py --timeframe 15m --top 50 --scan-every-sec 60
 
 # AI 분석 포함
 python ema_scanner.py --llm-alert
+```
+
+### 4.3.1 급등 사전 감시 (BTCUSDT.P)
+
+```bash
+# 1회 스냅샷 → data/surge_watch.db + (옵션) 텔레그램
+python surge_watch.py --once
+
+# 연속 폴링
+python surge_watch.py --loop
+
+# 상세: docs/SURGE_WATCH_GUIDE.md
 ```
 
 ### 4.4 보고서
