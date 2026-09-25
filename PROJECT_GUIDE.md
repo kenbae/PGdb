@@ -223,6 +223,9 @@ python surge_watch_api.py --port 8003 --collect
 python surge_watch.py --once
 
 # 상세: docs/SURGE_WATCH_GUIDE.md
+
+# Windows 재부팅 자동 시작 (관리자 PowerShell, 1회)
+# powershell -ExecutionPolicy Bypass -File .\scripts\install_surge_watch_autostart.ps1
 ```
 
 ### 4.4 보고서
