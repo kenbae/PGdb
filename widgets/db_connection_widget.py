@@ -13,12 +13,30 @@ class DbConnectionWidget(BaseWidget):
     
     def __init__(self):
         super().__init__()
-        self.widget_id = "db_connections"
-        self.widget_name = "DB 연결 수"
-        self.widget_icon = "🔌"
-        self.widget_color = "purple"
-        self.widget_size = "small"
-        self.widget_category = "system"
+
+    @property
+    def widget_id(self) -> str:
+        return "db_connections"
+
+    @property
+    def widget_name(self) -> str:
+        return "DB 연결 수"
+
+    @property
+    def widget_icon(self) -> str:
+        return "🔌"
+
+    @property
+    def widget_color(self) -> str:
+        return "purple"
+
+    @property
+    def widget_size(self) -> str:
+        return "small"
+
+    @property
+    def widget_category(self) -> str:
+        return "system"
     
     def get_data(self):
         """데이터베이스 연결 수 조회"""
