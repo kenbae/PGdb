@@ -79,8 +79,16 @@ async def lifespan(app: FastAPI):
 
         # 거래소 연결 (API 키를 문자열로 전달)
         import os
-        api_key = os.getenv('BINANCE_LIVE_API_KEY') or config.get('binance.api_key')
-        api_secret = os.getenv('BINANCE_LIVE_API_SECRET') or config.get('binance.api_secret')
+        api_key = (
+            os.getenv('BINANCE_LIVE_API_KEY')
+            or config.get('api.binance.live.api_key')
+            or config.get('binance.api_key')
+        )
+        api_secret = (
+            os.getenv('BINANCE_LIVE_API_SECRET')
+            or config.get('api.binance.live.api_secret')
+            or config.get('binance.api_secret')
+        )
 
         exchange = BinanceLive(api_key=api_key, api_secret=api_secret)
         logger.info("✅ 바이낸스 거래소 연결")
