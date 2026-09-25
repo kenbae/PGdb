@@ -1937,8 +1937,8 @@ async def get_binance_connection_status():
     try:
         import ccxt
 
-        api_key = os.getenv('BINANCE_LIVE_API_KEY') or config.get('binance.api_key', '')
-        api_secret = os.getenv('BINANCE_LIVE_API_SECRET') or config.get('binance.api_secret', '')
+        api_key = os.getenv('BINANCE_LIVE_API_KEY') or config.get('api.binance.live.api_key') or config.get('binance.api_key', '')
+        api_secret = os.getenv('BINANCE_LIVE_API_SECRET') or config.get('api.binance.live.api_secret') or config.get('binance.api_secret', '')
 
         if not api_key or not api_secret:
             return {
@@ -2005,8 +2005,8 @@ async def sync_binance_positions(
     try:
         import ccxt
 
-        api_key = os.getenv('BINANCE_LIVE_API_KEY') or config.get('binance.api_key', '')
-        api_secret = os.getenv('BINANCE_LIVE_API_SECRET') or config.get('binance.api_secret', '')
+        api_key = os.getenv('BINANCE_LIVE_API_KEY') or config.get('api.binance.live.api_key') or config.get('binance.api_key', '')
+        api_secret = os.getenv('BINANCE_LIVE_API_SECRET') or config.get('api.binance.live.api_secret') or config.get('binance.api_secret', '')
 
         if not api_key or not api_secret:
             raise HTTPException(status_code=400, detail="API 키가 설정되지 않았습니다")
@@ -5253,8 +5253,8 @@ async def close_futures_position(symbol: str):
     try:
         import ccxt
 
-        api_key = os.getenv('BINANCE_LIVE_API_KEY') or config.get('binance.api_key', '')
-        api_secret = os.getenv('BINANCE_LIVE_API_SECRET') or config.get('binance.api_secret', '')
+        api_key = os.getenv('BINANCE_LIVE_API_KEY') or config.get('api.binance.live.api_key') or config.get('binance.api_key', '')
+        api_secret = os.getenv('BINANCE_LIVE_API_SECRET') or config.get('api.binance.live.api_secret') or config.get('binance.api_secret', '')
 
         if not api_key or not api_secret:
             raise HTTPException(status_code=400, detail="API 키가 설정되지 않았습니다")
@@ -5315,8 +5315,8 @@ async def get_futures_trades(
     try:
         import ccxt
 
-        api_key = os.getenv('BINANCE_LIVE_API_KEY') or config.get('binance.api_key', '')
-        api_secret = os.getenv('BINANCE_LIVE_API_SECRET') or config.get('binance.api_secret', '')
+        api_key = os.getenv('BINANCE_LIVE_API_KEY') or config.get('api.binance.live.api_key') or config.get('binance.api_key', '')
+        api_secret = os.getenv('BINANCE_LIVE_API_SECRET') or config.get('api.binance.live.api_secret') or config.get('binance.api_secret', '')
 
         if not api_key or not api_secret:
             raise HTTPException(status_code=400, detail="API 키가 설정되지 않았습니다")
