@@ -43,12 +43,14 @@ _COLLECTOR_STATUS: Dict[str, Any] = {
     "symbols": ["BTCUSDT"],
 }
 _LOCK = threading.Lock()
-_BOOT: Dict[str, Any] = {"collect": True, "telegram": True}
+_BOOT: Dict[str, Any] = {"collect": True, "telegram": True, "config": "config.yaml"}
 
 
-def _reload_config(path: str = "config.yaml") -> None:
+def _reload_config(path: Optional[str] = None) -> None:
     global _CFG, _SCFG
-    _CFG = sw.load_config(path)
+    cfg_path = path or _BOOT.get("config") or "config.yaml"
+    _BOOT["config"] = cfg_path
+    _CFG = sw.load_config(cfg_path)
     _SCFG = sw.surge_cfg(_CFG)
     _COLLECTOR_STATUS["poll_sec"] = int(_SCFG.get("poll_sec", 30))
     _COLLECTOR_STATUS["symbols"] = list(_SCFG.get("symbols") or ["BTCUSDT"])
@@ -65,12 +67,20 @@ def _telegram_configured() -> bool:
 
 def _collector_loop(send_telegram: bool) -> None:
     client = sw.BinanceClient()
-    poll = max(10, int(_SCFG.get("poll_sec", 30)))
     _COLLECTOR_STATUS["running"] = True
     _COLLECTOR_STATUS["telegram"] = send_telegram
-    logger.info("collector started poll=%ss telegram=%s", poll, send_telegram)
+    # poll_sec은 매 틱마다 config.yaml에서 다시 읽어 반영
+    _reload_config()
+    logger.info(
+        "collector started poll=%ss telegram=%s",
+        _COLLECTOR_STATUS["poll_sec"],
+        send_telegram,
+    )
     while not _COLLECTOR_STOP.is_set():
         try:
+            _reload_config()
+            poll = max(10, int(_SCFG.get("poll_sec", 30)))
+            _COLLECTOR_STATUS["poll_sec"] = poll
             conn = _db()
             state = sw.load_state()
             try:
@@ -83,12 +93,13 @@ def _collector_loop(send_telegram: bool) -> None:
                         conn, _CFG, _SCFG, snap, state, send=send_telegram
                     )
                     logger.info(
-                        "%s score=%s level=%s fund=%.6f ret5=%+.2f%%",
+                        "%s score=%s level=%s fund=%.6f ret5=%+.2f%% poll=%ss",
                         symbol,
                         snap.risk_score,
                         level or "-",
                         snap.funding_rate,
                         snap.ret_5m_pct,
+                        poll,
                     )
                 _COLLECTOR_STATUS["last_ok_at"] = sw.fmt_kst(sw.utc_now())
                 _COLLECTOR_STATUS["last_error"] = None
@@ -97,6 +108,7 @@ def _collector_loop(send_telegram: bool) -> None:
         except Exception as e:
             logger.exception("collector tick failed: %s", e)
             _COLLECTOR_STATUS["last_error"] = str(e)
+            poll = max(10, int(_COLLECTOR_STATUS.get("poll_sec") or 30))
         _COLLECTOR_STOP.wait(poll)
     _COLLECTOR_STATUS["running"] = False
     logger.info("collector stopped")
@@ -104,6 +116,7 @@ def _collector_loop(send_telegram: bool) -> None:
 
 def start_collector(send_telegram: bool = True) -> dict:
     global _COLLECTOR_THREAD
+    _reload_config()
     with _LOCK:
         if _COLLECTOR_THREAD and _COLLECTOR_THREAD.is_alive():
             return {"status": "already_running", **_COLLECTOR_STATUS}
@@ -160,6 +173,7 @@ async def root():
 
 @app.get("/api/meta")
 async def api_meta():
+    _reload_config()
     return {
         "purpose": sw.PURPOSE,
         "data_layers": sw.DATA_LAYERS,
@@ -174,6 +188,7 @@ async def api_meta():
 
 @app.get("/api/status")
 async def api_status():
+    _reload_config()
     latest = None
     try:
         conn = _db()
@@ -189,6 +204,7 @@ async def api_status():
         "telegram_configured": _telegram_configured(),
         "latest": latest,
         "now_kst": sw.fmt_kst(sw.utc_now()),
+        "config_poll_sec": int(_SCFG.get("poll_sec", 30)),
     }
 
 
@@ -230,6 +246,7 @@ async def api_alerts(limit: int = Query(50, ge=1, le=200)):
 @app.post("/api/collect-once")
 async def api_collect_once(telegram: bool = True):
     """수동 1회 수집 (+ 조건 충족 시 텔레그램)."""
+    _reload_config()
     try:
         snaps = sw.run_once(_CFG, _SCFG, send=telegram and _telegram_configured())
         return {
@@ -297,9 +314,9 @@ def main():
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     _reload_config(args.config)
-
     do_collect = args.collect and not args.no_collect
     send_tg = not args.no_telegram
+    _BOOT["config"] = args.config
     _BOOT["collect"] = do_collect
     _BOOT["telegram"] = send_tg
 
@@ -308,6 +325,7 @@ def main():
     print(f"  UI:        http://localhost:{args.port}")
     print(f"  API docs:  http://localhost:{args.port}/docs")
     print(f"  Collector: {'ON' if do_collect else 'OFF'} | Telegram: {'ON' if send_tg else 'OFF'}")
+    print(f"  poll_sec:  {_COLLECTOR_STATUS.get('poll_sec')}")
     print("=" * 60)
 
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")

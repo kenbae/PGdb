@@ -446,7 +446,8 @@
 
       const col = status?.collector || {};
       const pc = document.getElementById('pillCollector');
-      pc.textContent = col.running ? `수집기 ON (${col.poll_sec || 30}s)` : '수집기 OFF';
+      const pollShown = status?.config_poll_sec || col.poll_sec || 30;
+      pc.textContent = col.running ? `수집기 ON (${pollShown}s)` : '수집기 OFF';
       pc.className = 'pill ' + (col.running ? 'on' : 'off');
       const pt = document.getElementById('pillTelegram');
       const tgOk = status?.telegram_configured;
