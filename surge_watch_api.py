@@ -237,7 +237,7 @@ async def api_history(
 @app.get("/api/klines")
 async def api_klines(
     symbol: Optional[str] = None,
-    interval: str = Query("1m", pattern="^(1m|3m|5m|15m|30m|1h)$"),
+    interval: str = Query("1m", pattern="^(1m|3m|5m|15m|30m|1h|4h)$"),
     limit: int = Query(60, ge=10, le=500),
 ):
     """Binance USDT-M 캔들 (차트용)."""

@@ -269,7 +269,7 @@ PROCESS_CONFIG = {
         "cwd": ".",
         "env": {},
         "icon": "🚨",
-        "description": "BTCUSDT.P SETUP/TRIGGER/SQUEEZE 감시 웹 + 텔레그램 (포트 8003)",
+        "description": "BTCUSDT.P 급등·급락 SETUP/TRIGGER/SQUEEZE·DUMP 감시 웹 + 텔레그램 (포트 8003)",
         "symbol_option": False,
         "port": 8003
     },

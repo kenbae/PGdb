@@ -210,14 +210,18 @@
     }
     .level-SETUP { color: var(--yellow); }
     .level-TRIGGER { color: var(--orange); }
-    .level-SQUEEZE { color: var(--red); }
+    .level-SQUEEZE { color: var(--green); }
+    .level-DUMP { color: var(--red); }
+    .level-CASCADE { color: var(--orange); }
+    .bias-up { color: var(--green); }
+    .bias-down { color: var(--red); }
   </style>
 </head>
 <body>
   <header>
     <div class="brand">
-      <h1>BTCUSDT.P 급등 감시</h1>
-      <p>SETUP → TRIGGER → SQUEEZE · 로컬 저장 · 텔레그램 경보</p>
+      <h1>BTCUSDT.P 급등·급락 감시</h1>
+      <p>SETUP → TRIGGER → SQUEEZE/DUMP · 로컬 저장 · 텔레그램 경보</p>
     </div>
     <div class="actions">
       <span id="pillCollector" class="pill off">수집기 —</span>
@@ -247,7 +251,7 @@
           <div>
             <div class="muted">위험 점수</div>
             <div id="scoreNum" class="score-num">—</div>
-            <div class="muted" id="scoreHint">40 SETUP · 60 TRIGGER · 75 SQUEEZE</div>
+            <div class="muted" id="scoreHint">40 SETUP · 60 TRIGGER · 75 SQUEEZE/DUMP</div>
           </div>
           <div style="text-align:right">
             <div class="muted" id="symbolLabel">BTCUSDT.P</div>
@@ -261,6 +265,8 @@
             <button type="button" data-tf="1m" class="active" onclick="setCandleTf('1m')">1m</button>
             <button type="button" data-tf="5m" onclick="setCandleTf('5m')">5m</button>
             <button type="button" data-tf="15m" onclick="setCandleTf('15m')">15m</button>
+            <button type="button" data-tf="1h" onclick="setCandleTf('1h')">1h</button>
+            <button type="button" data-tf="4h" onclick="setCandleTf('4h')">4h</button>
           </div>
           <div id="candleChart"></div>
           <div class="muted" id="candleCaption" style="margin-top:6px">BTCUSDT.P 1분봉 (Binance Futures)</div>
@@ -273,15 +279,19 @@
         <div class="glossary">
           <div class="g-item">
             <strong class="level-SETUP">SETUP (연료)</strong>
-            <span>음수 펀딩·숏 과밀처럼 “스퀴즈에 잘 터지는 상태”. 아직 급등은 아님.</span>
+            <span>숏 과밀·음수 펀딩 → 급등 위험 / 롱 과밀·양수 펀딩 → 급락 위험. 아직 급변은 아님.</span>
           </div>
           <div class="g-item">
             <strong class="level-TRIGGER">TRIGGER (발화)</strong>
-            <span>1~15분 수익률·거래량 이상치. 급등의 첫 수분. 텔레그램 전송.</span>
+            <span>1~15분 |수익률|·거래량 이상치. 급등(+) 또는 급락(−)의 첫 수분. 텔레그램 전송.</span>
           </div>
           <div class="g-item">
-            <strong class="level-SQUEEZE">SQUEEZE (확정)</strong>
-            <span>가격 상승 + OI 감소 등 숏커버 패턴이 겹칠 때. 최고 우선 알림.</span>
+            <strong class="level-SQUEEZE">SQUEEZE (급등 확정)</strong>
+            <span>가격↑ + OI↓ → 숏커버/숏청산 캐스케이드. 최고 우선 알림.</span>
+          </div>
+          <div class="g-item">
+            <strong class="level-DUMP">DUMP (급락 확정)</strong>
+            <span>가격↓ + OI↓ → 롱청산 캐스케이드. 급등과 대칭인 하락 확정 신호.</span>
           </div>
         </div>
       </div>
@@ -415,7 +425,8 @@
         ensureCandleChart();
         if (!candleSeries) return;
         const sym = candleSymbol || meta?.symbols?.[0] || 'BTCUSDT';
-        const limit = candleTf === '1m' ? 90 : candleTf === '5m' ? 72 : 64;
+        const limitMap = { '1m': 90, '5m': 72, '15m': 64, '1h': 72, '4h': 60 };
+        const limit = limitMap[candleTf] || 72;
         const data = await jget(`/api/klines?symbol=${encodeURIComponent(sym)}&interval=${candleTf}&limit=${limit}`);
         const candles = (data.candles || []).map(c => ({
           time: c.time,
@@ -469,6 +480,7 @@
 
     function renderMetrics(snap) {
       const items = [
+        { key: 'direction', label: '방향 바이어스', value: snap ? `${snap.bias || snap.direction || '—'} (${snap.direction || ''})` : '—', cls: snap && snap.direction === 'up' ? 'pos' : (snap && snap.direction === 'down' ? 'neg' : '') },
         { key: 'funding_rate', label: '펀딩비', value: snap ? Number(snap.funding_rate).toFixed(6) : '—', cls: snap && snap.funding_rate < 0 ? 'neg' : 'pos' },
         { key: 'open_interest', label: 'OI (계약)', value: snap ? fmt(snap.open_interest, 1) : '—' },
         { key: 'long_short_ratio', label: 'L/S 비율', value: snap && snap.long_short_ratio != null ? fmt(snap.long_short_ratio, 3) : '—' },
@@ -479,8 +491,7 @@
         { key: 'volume_z_5m', label: '거래량 Z(5m)', value: snap ? fmt(snap.volume_z_5m, 2) : '—' },
         { key: 'premium_bps', label: '프리미엄(bps)', value: snap ? fmt(snap.premium_bps, 1) : '—', cls: snap ? clsPct(snap.premium_bps) : '' },
         { key: 'price_change_24h_pct', label: '24h 변동', value: snap ? fmtPct(snap.price_change_24h_pct) : '—', cls: snap ? clsPct(snap.price_change_24h_pct) : '' },
-        { key: 'top_ls_ratio', label: '탑트레이더 L/S', value: snap && snap.top_ls_ratio != null ? fmt(snap.top_ls_ratio, 3) : '—' },
-        { key: 'risk_score', label: '위험 점수', value: snap ? String(snap.risk_score) : '—' },
+        { key: 'risk_score', label: '위험 점수', value: snap ? `${snap.risk_score} (↑${snap.up_score ?? '—'}/↓${snap.down_score ?? '—'})` : '—' },
       ];
       document.getElementById('metrics').innerHTML = items.map(it => `
         <div class="metric">
@@ -510,15 +521,25 @@
 
     function applyLatest(snap, status) {
       const score = snap ? snap.risk_score : 0;
-      const level = (snap && snap.level) || (score >= 75 ? 'SQUEEZE' : score >= 60 ? 'TRIGGER' : score >= 40 ? 'SETUP' : null);
+      const direction = snap?.direction || 'neutral';
+      let level = snap && snap.level;
+      if (!level && score >= 75) level = direction === 'down' ? 'DUMP' : (direction === 'up' ? 'SQUEEZE' : 'CASCADE');
+      else if (!level && score >= 60) level = 'TRIGGER';
+      else if (!level && score >= 40) level = 'SETUP';
       document.getElementById('scoreNum').textContent = snap ? score : '—';
       document.getElementById('markPrice').textContent = snap ? fmt(snap.mark_price, 2) : '—';
       candleSymbol = snap?.symbol || meta?.symbols?.[0] || 'BTCUSDT';
-      document.getElementById('symbolLabel').textContent = candleSymbol + '.P';
+      const biasTxt = snap?.bias || ({up:'급등', down:'급락', neutral:'중립'}[direction] || '');
+      document.getElementById('symbolLabel').textContent = candleSymbol + '.P' + (biasTxt ? ` · ${biasTxt}` : '');
       document.getElementById('tsLabel').textContent = snap?.ts_kst || '스냅샷 없음';
       const badge = document.getElementById('levelBadge');
-      badge.textContent = level || 'IDLE';
-      badge.className = 'pill ' + (level === 'SQUEEZE' ? 'hot' : level === 'TRIGGER' ? 'warn' : level === 'SETUP' ? 'warn' : 'off');
+      badge.textContent = level ? `${level}${direction !== 'neutral' ? '/' + direction : ''}` : 'IDLE';
+      badge.className = 'pill ' + (
+        level === 'DUMP' ? 'hot' :
+        level === 'SQUEEZE' ? 'on' :
+        level === 'TRIGGER' || level === 'CASCADE' ? 'warn' :
+        level === 'SETUP' ? 'warn' : 'off'
+      );
       document.getElementById('alertFlags').textContent = snap?.alerts?.length
         ? '플래그: ' + snap.alerts.join(', ')
         : '플래그: 없음 (정상 구간)';
