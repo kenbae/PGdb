@@ -171,6 +171,17 @@ async def root():
     return HTMLResponse(path.read_text(encoding="utf-8"))
 
 
+def _normalize_symbol(symbol: Optional[str] = None) -> str:
+    """Accept BTCUSDT / BTCUSDT.P / btcusdt and return Binance id."""
+    configured = list(_SCFG.get("symbols") or ["BTCUSDT"])
+    if not symbol:
+        return configured[0]
+    sym = str(symbol).upper().replace(".P", "").replace("/", "").replace(":", "")
+    if not sym.endswith("USDT") and not sym.endswith("USD"):
+        sym = sym + "USDT"
+    return sym
+
+
 @app.get("/api/meta")
 async def api_meta():
     _reload_config()
@@ -187,13 +198,13 @@ async def api_meta():
 
 
 @app.get("/api/status")
-async def api_status():
+async def api_status(symbol: Optional[str] = None):
     _reload_config()
     latest = None
+    sym = _normalize_symbol(symbol)
     try:
         conn = _db()
         try:
-            sym = (_SCFG.get("symbols") or ["BTCUSDT"])[0]
             latest = sw.query_latest(conn, sym, _SCFG.get("thresholds"))
         finally:
             conn.close()
@@ -202,6 +213,8 @@ async def api_status():
     return {
         "collector": dict(_COLLECTOR_STATUS),
         "telegram_configured": _telegram_configured(),
+        "symbol": sym,
+        "symbols": list(_SCFG.get("symbols") or ["BTCUSDT"]),
         "latest": latest,
         "now_kst": sw.fmt_kst(sw.utc_now()),
         "now_utc": sw.utc_now().isoformat(),
@@ -211,12 +224,13 @@ async def api_status():
 
 @app.get("/api/latest")
 async def api_latest(symbol: Optional[str] = None):
-    sym = symbol or (_SCFG.get("symbols") or ["BTCUSDT"])[0]
+    _reload_config()
+    sym = _normalize_symbol(symbol)
     conn = _db()
     try:
         row = sw.query_latest(conn, sym, _SCFG.get("thresholds"))
         if not row:
-            raise HTTPException(404, detail="스냅샷 없음. 수집기를 시작하세요.")
+            raise HTTPException(404, detail=f"{sym} 스냅샷 없음. 수집기를 시작하세요.")
         return row
     finally:
         conn.close()
@@ -227,7 +241,8 @@ async def api_history(
     symbol: Optional[str] = None,
     limit: int = Query(120, ge=10, le=1000),
 ):
-    sym = symbol or (_SCFG.get("symbols") or ["BTCUSDT"])[0]
+    _reload_config()
+    sym = _normalize_symbol(symbol)
     conn = _db()
     try:
         return {"symbol": sym, "rows": sw.query_history(conn, sym, limit, _SCFG.get("thresholds"))}
@@ -243,7 +258,7 @@ async def api_klines(
 ):
     """Binance USDT-M 캔들 (차트용)."""
     _reload_config()
-    sym = symbol or (_SCFG.get("symbols") or ["BTCUSDT"])[0]
+    sym = _normalize_symbol(symbol)
     try:
         client = sw.BinanceClient()
         raw = client.get(
@@ -269,10 +284,15 @@ async def api_klines(
 
 
 @app.get("/api/alerts")
-async def api_alerts(limit: int = Query(50, ge=1, le=200)):
+async def api_alerts(
+    limit: int = Query(50, ge=1, le=200),
+    symbol: Optional[str] = None,
+):
+    _reload_config()
+    sym = _normalize_symbol(symbol) if symbol else None
     conn = _db()
     try:
-        return {"alerts": sw.query_alerts(conn, limit)}
+        return {"symbol": sym, "alerts": sw.query_alerts(conn, limit, symbol=sym)}
     finally:
         conn.close()
 

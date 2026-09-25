@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BTCUSDT.P 급등 감시</title>
+  <title>선물 급등·급락 감시</title>
   <style>
     :root {
       --bg: #0b0e11;
@@ -230,10 +230,14 @@
 <body>
   <header>
     <div class="brand">
-      <h1>BTCUSDT.P 급등·급락 감시</h1>
+      <h1>선물 급등·급락 감시</h1>
       <p>SETUP → TRIGGER → SQUEEZE/DUMP · 로컬 저장 · 텔레그램 경보</p>
     </div>
     <div class="actions">
+      <label class="pill" style="gap:8px">
+        <span>심볼</span>
+        <select id="symbolSelect" class="tz-select" onchange="onSymbolChange()"></select>
+      </label>
       <label class="pill" style="gap:8px">
         <span>시간대</span>
         <select id="tzSelect" class="tz-select" onchange="onTimezoneChange()"></select>
@@ -360,6 +364,7 @@
     let lastStatus = null;
     let lastAlerts = [];
 
+    const SYMBOL_STORAGE_KEY = 'surge_watch_symbol';
     const TZ_OPTIONS = [
       { id: 'UTC+9', offset: 9, label: 'UTC+9 (KST)' },
       { id: 'UTC+0', offset: 0, label: 'UTC+0' },
@@ -370,6 +375,46 @@
       { id: 'local', offset: null, label: '브라우저 로컬' },
     ];
     const TZ_STORAGE_KEY = 'surge_watch_tz';
+
+    function normalizeSymbol(raw) {
+      if (!raw) return 'BTCUSDT';
+      let s = String(raw).toUpperCase().replace('.P', '').replace('/', '').replace(':', '');
+      if (!s.endsWith('USDT') && !s.endsWith('USD')) s += 'USDT';
+      return s;
+    }
+
+    function getSelectedSymbol() {
+      const fromStore = localStorage.getItem(SYMBOL_STORAGE_KEY);
+      const configured = (meta && meta.symbols) || ['BTCUSDT', 'ZECUSDT'];
+      const pick = normalizeSymbol(fromStore || configured[0]);
+      if (configured.map(normalizeSymbol).includes(pick)) return pick;
+      return normalizeSymbol(configured[0]);
+    }
+
+    function initSymbolSelect() {
+      const sel = document.getElementById('symbolSelect');
+      if (!sel) return;
+      const configured = (meta && meta.symbols && meta.symbols.length)
+        ? meta.symbols.map(normalizeSymbol)
+        : ['BTCUSDT', 'ZECUSDT'];
+      // ensure ZECUSDT appears even if old config cached briefly
+      if (!configured.includes('ZECUSDT')) configured.push('ZECUSDT');
+      if (!configured.includes('BTCUSDT')) configured.unshift('BTCUSDT');
+      const cur = getSelectedSymbol();
+      sel.innerHTML = configured.map(s =>
+        `<option value="${s}" ${s === cur ? 'selected' : ''}>${s}.P</option>`
+      ).join('');
+      candleSymbol = cur;
+    }
+
+    function onSymbolChange() {
+      const sel = document.getElementById('symbolSelect');
+      const sym = normalizeSymbol(sel.value);
+      localStorage.setItem(SYMBOL_STORAGE_KEY, sym);
+      candleSymbol = sym;
+      toast(`심볼: ${sym}.P`);
+      refresh();
+    }
 
     function getSelectedTz() {
       const id = localStorage.getItem(TZ_STORAGE_KEY) || 'UTC+9';
@@ -658,7 +703,7 @@
       else if (!level && score >= 40) level = 'SETUP';
       document.getElementById('scoreNum').textContent = snap ? score : '—';
       document.getElementById('markPrice').textContent = snap ? fmt(snap.mark_price, 2) : '—';
-      candleSymbol = snap?.symbol || meta?.symbols?.[0] || 'BTCUSDT';
+      candleSymbol = getSelectedSymbol();
       const biasTxt = snap?.bias || ({up:'급등', down:'급락', neutral:'중립'}[direction] || '');
       document.getElementById('symbolLabel').textContent = candleSymbol + '.P' + (biasTxt ? ` · ${biasTxt}` : '');
       document.getElementById('tsLabel').textContent = snap?.ts
@@ -697,10 +742,16 @@
           renderPurpose();
           renderLayers();
           renderGlossary();
+          initSymbolSelect();
+        } else {
+          // keep select in sync if config symbols change
+          initSymbolSelect();
         }
+        const sym = getSelectedSymbol();
+        candleSymbol = sym;
         const [status, alerts] = await Promise.all([
-          jget('/api/status'),
-          jget('/api/alerts?limit=30'),
+          jget('/api/status?symbol=' + encodeURIComponent(sym)),
+          jget('/api/alerts?limit=30&symbol=' + encodeURIComponent(sym)),
         ]);
         applyLatest(status.latest && !status.latest.error ? status.latest : null, status);
         renderAlerts(alerts.alerts || []);
@@ -741,6 +792,7 @@
     }
 
     initTimezoneSelect();
+    // symbol select filled after /api/meta in refresh()
     refresh();
     setInterval(refresh, 15000);
   </script>

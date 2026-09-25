@@ -168,10 +168,11 @@ websocket:
   max_reconnect_attempts: 10
   save_to_db: true
   save_ticker: false
-# BTCUSDT.P 급등 사전 감시 (docs/SURGE_WATCH_GUIDE.md)
+# 급등·급락 사전 감시 (docs/SURGE_WATCH_GUIDE.md)
 surge_watch:
   symbols:
   - BTCUSDT
+  - ZECUSDT
   poll_sec: 60
   db_path: data/surge_watch.db
   lookback_1m_bars: 120

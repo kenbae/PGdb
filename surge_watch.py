@@ -127,7 +127,7 @@ def fmt_kst(dt: datetime) -> str:
 # Glossary / data layers (web UI)
 # ---------------------------
 PURPOSE = {
-    "title": "BTCUSDT.P 급등·급락 사전 감시",
+    "title": "선물 급등·급락 사전 감시 (BTCUSDT / ZECUSDT 등)",
     "summary": (
         "숏/롱 과밀(SETUP)을 상시 감시하다가, 급등·급락의 첫 수분(TRIGGER)과 "
         "청산 캐스케이드 확정(SQUEEZE=급등 / DUMP=급락)을 로컬에 기록하고 텔레그램으로 알립니다."
@@ -363,12 +363,18 @@ def query_history(conn: sqlite3.Connection, symbol: str, limit: int = 120, thres
     return [row_to_snapshot_dict(r, thresholds) for r in reversed(rows)]
 
 
-def query_alerts(conn: sqlite3.Connection, limit: int = 50) -> List[dict]:
+def query_alerts(conn: sqlite3.Connection, limit: int = 50, symbol: Optional[str] = None) -> List[dict]:
     conn.row_factory = sqlite3.Row
-    rows = conn.execute(
-        "SELECT * FROM surge_alerts ORDER BY id DESC LIMIT ?",
-        (limit,),
-    ).fetchall()
+    if symbol:
+        rows = conn.execute(
+            "SELECT * FROM surge_alerts WHERE symbol=? ORDER BY id DESC LIMIT ?",
+            (symbol, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM surge_alerts ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
