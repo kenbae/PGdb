@@ -234,6 +234,39 @@ async def api_history(
         conn.close()
 
 
+@app.get("/api/klines")
+async def api_klines(
+    symbol: Optional[str] = None,
+    interval: str = Query("1m", pattern="^(1m|3m|5m|15m|30m|1h)$"),
+    limit: int = Query(60, ge=10, le=500),
+):
+    """Binance USDT-M 캔들 (차트용)."""
+    _reload_config()
+    sym = symbol or (_SCFG.get("symbols") or ["BTCUSDT"])[0]
+    try:
+        client = sw.BinanceClient()
+        raw = client.get(
+            "/fapi/v1/klines",
+            {"symbol": sym, "interval": interval, "limit": limit},
+        )
+        candles = []
+        for k in raw:
+            candles.append(
+                {
+                    "time": int(k[0]) // 1000,  # unix sec (UTC)
+                    "open": float(k[1]),
+                    "high": float(k[2]),
+                    "low": float(k[3]),
+                    "close": float(k[4]),
+                    "volume": float(k[5]),
+                }
+            )
+        return {"symbol": sym, "interval": interval, "candles": candles}
+    except Exception as e:
+        logger.exception("klines failed")
+        raise HTTPException(500, detail=str(e))
+
+
 @app.get("/api/alerts")
 async def api_alerts(limit: int = Query(50, ge=1, le=200)):
     conn = _db()
