@@ -1,28 +1,30 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-  Install Windows Scheduled Task: start Surge Watch at boot/logon.
+  Install Windows Scheduled Task to auto-start Surge Watch after logon.
 
 .USAGE
-  Right-click PowerShell -> Run as administrator
   cd C:\Users\kenne\PGdb
   powershell -ExecutionPolicy Bypass -File .\scripts\install_surge_watch_autostart.ps1
+  powershell -ExecutionPolicy Bypass -File .\scripts\install_surge_watch_autostart.ps1 -StartNow
 #>
-$ErrorActionPreference = 'Stop'
+param(
+  [switch]$StartNow,
+  [int]$DelaySeconds = 45
+)
 
+$ErrorActionPreference = 'Stop'
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $BatPath = Join-Path $ProjectRoot 'scripts\start_surge_watch.bat'
 $TaskName = 'PGdbSurgeWatch'
 
-if (-not (Test-Path $BatPath)) {
-  throw "Missing start script: $BatPath"
-}
+if (-not (Test-Path $BatPath)) { throw "Missing: $BatPath" }
 
 Write-Host "Project : $ProjectRoot"
 Write-Host "Script  : $BatPath"
 Write-Host "Task    : $TaskName"
+Write-Host "Delay   : ${DelaySeconds}s after logon"
 
-# Remove old task if present
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
 $action = New-ScheduledTaskAction `
@@ -30,51 +32,67 @@ $action = New-ScheduledTaskAction `
   -Argument "/c `"$BatPath`"" `
   -WorkingDirectory $ProjectRoot
 
-# At startup + at user logon (covers service boot and desktop login)
-$triggerStartup = New-ScheduledTaskTrigger -AtStartup
-$triggerLogon = New-ScheduledTaskTrigger -AtLogOn
+# AtLogOn is reliable on desktop PCs (AtStartup+Interactive often fails before login)
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+# Delay so network/disk are ready
+$trigger.Delay = "PT${DelaySeconds}S"
 
 $settings = New-ScheduledTaskSettingsSet `
   -AllowStartIfOnBatteries `
   -DontStopIfGoingOnBatteries `
   -StartWhenAvailable `
-  -RestartCount 5 `
+  -RestartCount 10 `
   -RestartInterval (New-TimeSpan -Minutes 1) `
-  -ExecutionTimeLimit (New-TimeSpan -Days 0) `
-  -MultipleInstances IgnoreNew
+  -ExecutionTimeLimit ([TimeSpan]::Zero) `
+  -MultipleInstances IgnoreNew `
+  -RunOnlyIfNetworkAvailable:$false
 
-# Run as current user, highest privileges (needed for some firewall/network cases)
 $principal = New-ScheduledTaskPrincipal `
-  -UserId $env:USERNAME `
+  -UserId $env:USERDOMAIN\$env:USERNAME `
   -LogonType Interactive `
   -RunLevel Highest
 
 Register-ScheduledTask `
   -TaskName $TaskName `
   -Action $action `
-  -Trigger @($triggerStartup, $triggerLogon) `
+  -Trigger $trigger `
   -Settings $settings `
   -Principal $principal `
-  -Description 'Auto-start PGdb BTCUSDT.P Surge Watch (http://0.0.0.0:8003)' `
+  -Description 'PGdb Surge Watch auto-start (0.0.0.0:8003) after user logon' `
   -Force | Out-Null
 
+# Also drop a Startup-folder shortcut as backup
+$startup = [Environment]::GetFolderPath('Startup')
+$shortcutPath = Join-Path $startup 'PGdbSurgeWatch.lnk'
+$wscript = New-Object -ComObject WScript.Shell
+$sc = $wscript.CreateShortcut($shortcutPath)
+$sc.TargetPath = $BatPath
+$sc.WorkingDirectory = $ProjectRoot
+$sc.WindowStyle = 7
+$sc.Description = 'PGdb Surge Watch'
+$sc.Save()
+Write-Host "Startup shortcut: $shortcutPath"
+
 Write-Host ''
-Write-Host '[OK] Scheduled task installed.' -ForegroundColor Green
-Write-Host '     Name : PGdbSurgeWatch'
-Write-Host '     When : At startup + at logon'
-Write-Host '     URL  : http://<PC_IP>:8003'
-Write-Host ''
-Write-Host 'Start now?'
-$ans = Read-Host 'Type Y to start immediately (Y/N)'
-if ($ans -match '^[Yy]') {
+Write-Host '[OK] Autostart installed.' -ForegroundColor Green
+Write-Host '     Task     : PGdbSurgeWatch (At logon + delay)'
+Write-Host '     Backup   : Startup folder shortcut'
+Write-Host '     Log      : logs\surge_watch_autostart.log'
+Write-Host '     URL      : http://<PC_IP>:8003'
+
+$doStart = $StartNow
+if (-not $PSBoundParameters.ContainsKey('StartNow')) {
+  $ans = Read-Host 'Start now? (Y/N)'
+  $doStart = $ans -match '^[Yy]'
+}
+if ($doStart) {
   Start-ScheduledTask -TaskName $TaskName
-  Start-Sleep -Seconds 2
+  Start-Sleep -Seconds 3
   Get-ScheduledTask -TaskName $TaskName | Get-ScheduledTaskInfo |
     Format-List LastRunTime, LastTaskResult, NextRunTime
-  Write-Host 'Check: netstat -an | findstr 8003   (expect 0.0.0.0:8003)'
+  netstat -an | findstr ':8003'
 }
 
 Write-Host ''
-Write-Host 'Uninstall later:'
-Write-Host '  powershell -ExecutionPolicy Bypass -File .\scripts\uninstall_surge_watch_autostart.ps1'
-Pause
+Write-Host 'Diagnose: powershell -ExecutionPolicy Bypass -File .\scripts\check_surge_watch_autostart.ps1'
+if (-not $StartNow) { Pause }

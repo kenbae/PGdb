@@ -115,13 +115,20 @@ python surge_watch.py --analyze-day 2026-08-19 --symbol BTCUSDT
 
 ```powershell
 cd C:\Users\kenne\PGdb
-powershell -ExecutionPolicy Bypass -File .\scripts\install_surge_watch_autostart.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\install_surge_watch_autostart.ps1 -StartNow
 ```
 
-- 작업 이름: `PGdbSurgeWatch`
-- 부팅/로그온 시 `scripts\start_surge_watch.bat` 실행 (`--host 0.0.0.0 --port 8003`)
+- 작업 이름: `PGdbSurgeWatch` (**로그온 후 약 45초** 뒤 시작 — 부팅 직후보다 안정적)
+- 백업: 시작프로그램 바로가기 `PGdbSurgeWatch.lnk`
+- 실행: `scripts\start_surge_watch.bat` (`--host 0.0.0.0 --port 8003`)
 - 로그: `logs\surge_watch_autostart.log`
-- 제거: `.\scripts\uninstall_surge_watch_autostart.ps1`
+
+진단:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check_surge_watch_autostart.ps1
+```
+
+제거: `.\scripts\uninstall_surge_watch_autostart.ps1`
 
 확인:
 ```powershell
