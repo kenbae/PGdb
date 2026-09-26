@@ -3,16 +3,17 @@
 """
 BTCUSDT.P 급등 감시 웹 대시보드 + 백그라운드 수집기.
 
-Process Manager에서 시작:
-  python surge_watch_api.py --port 8003 --collect
+Process Manager / 자동시작:
+  python surge_watch_api.py --host 0.0.0.0 --port 8003 --collect
 
-브라우저: http://localhost:8003
+브라우저: http://localhost:8003  또는  http://<LAN_IP>:8003
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import os
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -341,8 +342,12 @@ async def api_test_telegram():
 
 def main():
     parser = argparse.ArgumentParser(description="Surge Watch Web Dashboard")
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8003)
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("SURGE_WATCH_HOST", "0.0.0.0"),
+        help="Bind address (default 0.0.0.0 for LAN/DDNS). Use 127.0.0.1 for local-only.",
+    )
+    parser.add_argument("--port", type=int, default=int(os.environ.get("SURGE_WATCH_PORT", "8003")))
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument(
         "--collect",
@@ -361,6 +366,10 @@ def main():
         help="경보 텔레그램 비활성화",
     )
     args = parser.parse_args()
+
+    # Safety: empty host must never silently become loopback-only
+    if not args.host or args.host.strip() in {"", "localhost"}:
+        args.host = "0.0.0.0"
 
     logging.basicConfig(
         level=logging.INFO,

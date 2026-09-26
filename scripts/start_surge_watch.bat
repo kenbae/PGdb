@@ -7,7 +7,6 @@ if not exist "logs" mkdir logs
 set LOG=logs\surge_watch_autostart.log
 echo ========== %date% %time% ==========>> "%LOG%"
 echo CWD=%CD%>> "%LOG%"
-echo PATH=%PATH%>> "%LOG%"
 
 set PYEXE=
 if exist "%LocalAppData%\Programs\Python\Python312\python.exe" set PYEXE=%LocalAppData%\Programs\Python\Python312\python.exe
@@ -28,14 +27,23 @@ if not defined PYEXE (
   echo [ERROR] python.exe not found>> "%LOG%"
   exit /b 1
 )
-
 echo Using PYEXE=!PYEXE!>> "%LOG%"
 
-REM If already listening on 8003, do not start a second instance
-netstat -an | findstr /R /C:":8003 .*LISTENING" >nul 2>&1
+REM If already bound to ALL interfaces, skip. If only localhost, kill and restart.
+netstat -an | findstr /C:"0.0.0.0:8003" | findstr "LISTENING" >nul 2>&1
 if %errorlevel%==0 (
-  echo [SKIP] port 8003 already LISTENING>> "%LOG%"
+  echo [SKIP] already LISTENING on 0.0.0.0:8003>> "%LOG%"
   exit /b 0
+)
+
+netstat -an | findstr /C:"127.0.0.1:8003" | findstr "LISTENING" >nul 2>&1
+if %errorlevel%==0 (
+  echo [FIX] 127.0.0.1:8003 detected — killing old process>> "%LOG%"
+  for /f "tokens=5" %%p in ('netstat -ano ^| findstr /C:":8003" ^| findstr "LISTENING"') do (
+    echo killing PID %%p>> "%LOG%"
+    taskkill /F /PID %%p >nul 2>&1
+  )
+  timeout /t 2 /nobreak >nul
 )
 
 echo Starting surge_watch_api --host 0.0.0.0 --port 8003 --collect>> "%LOG%"
