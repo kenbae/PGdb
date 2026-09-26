@@ -168,3 +168,31 @@ websocket:
   max_reconnect_attempts: 10
   save_to_db: true
   save_ticker: false
+# 급등·급락 사전 감시 (docs/SURGE_WATCH_GUIDE.md)
+surge_watch:
+  symbols:
+  - BTCUSDT
+  - ZECUSDT
+  poll_sec: 60
+  db_path: data/surge_watch.db
+  lookback_1m_bars: 120
+  cooldown_sec: 900
+  thresholds:
+    funding_negative: -0.00005
+    funding_very_negative: -0.0001
+    funding_positive: 0.00005
+    funding_very_positive: 0.0001
+    short_account_min: 0.52
+    long_account_min: 0.52
+    ls_ratio_max: 0.95
+    ls_ratio_min: 1.05
+    ret_1m_pct: 0.35
+    ret_5m_pct: 0.8
+    ret_15m_pct: 1.5
+    volume_z_5m: 2.5
+    oi_drop_pct_15m: 1.5
+    oi_rise_pct_15m: 2.0
+    premium_bps_abs: 8.0
+    setup_score: 40
+    trigger_score: 60
+    squeeze_score: 75
