@@ -43,12 +43,14 @@ Write-Host "Python: $py"
 if (-not (Test-Path 'logs')) { New-Item -ItemType Directory -Path 'logs' | Out-Null }
 $log = Join-Path $ProjectRoot 'logs\surge_watch_autostart.log'
 
-$arg = '-u surge_watch_api.py --host 0.0.0.0 --port 8003 --collect'
-Write-Host "Start: $py $arg"
-Start-Process -FilePath $py -ArgumentList $arg -WorkingDirectory $ProjectRoot `
-  -WindowStyle Hidden `
-  -RedirectStandardOutput $log `
-  -RedirectStandardError $log
+# Start-Process cannot redirect stdout+stderr to the SAME file.
+# Use cmd.exe so both streams append to one log (same as start_surge_watch.bat).
+$argList = @(
+  '/c',
+  "`"$py`" -u surge_watch_api.py --host 0.0.0.0 --port 8003 --collect >> `"$log`" 2>&1"
+)
+Write-Host "Start: $py -u surge_watch_api.py --host 0.0.0.0 --port 8003 --collect"
+Start-Process -FilePath 'cmd.exe' -ArgumentList $argList -WorkingDirectory $ProjectRoot -WindowStyle Hidden
 
 Start-Sleep -Seconds 3
 Write-Host ''
@@ -57,3 +59,4 @@ netstat -an | findstr ':8003'
 Write-Host ''
 Write-Host 'Expect: TCP  0.0.0.0:8003  ... LISTENING'
 Write-Host 'Open:   http://127.0.0.1:8003  and  http://<LAN_IP>:8003'
+Write-Host "Log:    $log"
