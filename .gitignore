@@ -16,6 +16,7 @@ __pycache__/
 # 기타
 *.index
 notify_state.json
+data/surge_watch_state.json
 out/
 temp_*
 

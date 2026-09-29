@@ -1,0 +1,19 @@
+[Unit]
+Description=PGdb BTCUSDT.P Surge Watch (port 8003)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/PGdb
+# Change User/WorkingDirectory/ExecStart paths to match your server
+User=ubuntu
+Group=ubuntu
+ExecStart=/usr/bin/python3 -u /opt/PGdb/surge_watch_api.py --host 0.0.0.0 --port 8003 --collect
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/PGdb/logs/surge_watch_autostart.log
+StandardError=append:/opt/PGdb/logs/surge_watch_autostart.log
+
+[Install]
+WantedBy=multi-user.target
