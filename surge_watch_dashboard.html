@@ -301,7 +301,7 @@
           </div>
           <div class="g-item">
             <strong class="level-TRIGGER">TRIGGER (발화)</strong>
-            <span>1~15분 |수익률|·거래량 이상치. 급등(+) 또는 급락(−)의 첫 수분. 텔레그램 전송.</span>
+            <span>1~15분 |수익률|·거래량 이상치. 급등(+) 또는 급락(−)의 첫 수분. 텔레그램은 점수 50 이상일 때만 전송.</span>
           </div>
           <div class="g-item">
             <strong class="level-SQUEEZE">SQUEEZE (급등 확정)</strong>
@@ -328,6 +328,45 @@
     <section class="card">
       <h2>지표 사전</h2>
       <div id="glossary" class="glossary"></div>
+    </section>
+
+    <section class="card">
+      <h2>점수 이력 <span class="muted">DB 저장 · 최대 1년 · 텔레그램은 50점 이상만</span></h2>
+      <div class="chart-toolbar" style="margin-bottom:10px">
+        <button type="button" data-score-days="1" onclick="setScoreDays(1)">1일</button>
+        <button type="button" data-score-days="7" class="active" onclick="setScoreDays(7)">7일</button>
+        <button type="button" data-score-days="30" onclick="setScoreDays(30)">30일</button>
+        <button type="button" data-score-days="90" onclick="setScoreDays(90)">90일</button>
+        <button type="button" data-score-days="365" onclick="setScoreDays(365)">1년</button>
+        <label class="muted" style="margin-left:12px;font-size:13px">
+          최소점수
+          <select id="scoreMinSelect" onchange="refreshScoreHistory()" style="margin-left:4px">
+            <option value="0">전체</option>
+            <option value="40">40+</option>
+            <option value="50" selected>50+</option>
+            <option value="60">60+</option>
+            <option value="75">75+</option>
+          </select>
+        </label>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>시각</th>
+              <th>점수</th>
+              <th>↑/↓</th>
+              <th>방향</th>
+              <th>레벨</th>
+              <th>가격</th>
+              <th>5m%</th>
+            </tr>
+          </thead>
+          <tbody id="scoreHistoryBody">
+            <tr><td colspan="7" class="muted">이력 없음</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="card">
@@ -363,6 +402,7 @@
     let candleSymbol = 'BTCUSDT';
     let lastStatus = null;
     let lastAlerts = [];
+    let scoreDays = 7;
 
     const SYMBOL_STORAGE_KEY = 'surge_watch_symbol';
     const TZ_OPTIONS = [
@@ -693,6 +733,48 @@
       `).join('');
     }
 
+    function setScoreDays(days) {
+      scoreDays = days;
+      document.querySelectorAll('[data-score-days]').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.getAttribute('data-score-days')) === days);
+      });
+      refreshScoreHistory();
+    }
+
+    function renderScoreHistory(rows) {
+      const body = document.getElementById('scoreHistoryBody');
+      if (!rows || !rows.length) {
+        body.innerHTML = '<tr><td colspan="7" class="muted">이력 없음 (수집기가 돌면 쌓입니다)</td></tr>';
+        return;
+      }
+      const bias = { up: '급등', down: '급락', neutral: '중립' };
+      body.innerHTML = rows.map(r => `
+        <tr>
+          <td>${formatInSelectedTz(r.ts)}</td>
+          <td><strong>${r.risk_score ?? 0}</strong></td>
+          <td>${r.up_score ?? 0} / ${r.down_score ?? 0}</td>
+          <td>${bias[r.direction] || r.direction || '—'}</td>
+          <td class="level-${r.level || ''}">${r.level || '—'}</td>
+          <td>${r.mark_price != null ? Number(r.mark_price).toLocaleString(undefined, {maximumFractionDigits: 2}) : '—'}</td>
+          <td class="${Number(r.ret_5m_pct) > 0 ? 'pos' : (Number(r.ret_5m_pct) < 0 ? 'neg' : '')}">${r.ret_5m_pct != null ? (r.ret_5m_pct >= 0 ? '+' : '') + Number(r.ret_5m_pct).toFixed(2) + '%' : '—'}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function refreshScoreHistory() {
+      try {
+        const sym = getSelectedSymbol();
+        const minEl = document.getElementById('scoreMinSelect');
+        const minScore = minEl ? minEl.value : '50';
+        const data = await jget(
+          `/api/score-history?symbol=${encodeURIComponent(sym)}&days=${scoreDays}&limit=400&min_score=${encodeURIComponent(minScore)}`
+        );
+        renderScoreHistory(data.rows || []);
+      } catch (e) {
+        console.warn('score-history', e);
+      }
+    }
+
     function applyLatest(snap, status) {
       lastStatus = status;
       const score = snap ? snap.risk_score : 0;
@@ -755,7 +837,7 @@
         ]);
         applyLatest(status.latest && !status.latest.error ? status.latest : null, status);
         renderAlerts(alerts.alerts || []);
-        await refreshCandles();
+        await Promise.all([refreshCandles(), refreshScoreHistory()]);
       } catch (e) {
         console.error(e);
         toast('새로고침 실패: ' + e.message);

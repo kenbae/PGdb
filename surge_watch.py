@@ -85,6 +85,8 @@ def surge_cfg(cfg: dict) -> dict:
         "db_path": str(DEFAULT_DB),
         "lookback_1m_bars": 120,
         "cooldown_sec": 900,
+        "telegram_min_score": 50,          # 텔레그램 전송 최소 점수
+        "score_history_keep_days": 365,    # 점수 이력 보관 일수
         "thresholds": {
             "funding_negative": -0.00005,      # crowded shorts → 급등(스퀴즈) 연료
             "funding_very_negative": -0.0001,
@@ -166,10 +168,10 @@ DATA_LAYERS = [
     {
         "id": "alert_delivery",
         "name": "알림·저장 레이어",
-        "purpose": "로컬 이력 보존 + 텔레그램 즉시 전달",
-        "sources": ["SQLite data/surge_watch.db", "Telegram Bot API"],
-        "metrics": ["surge_snapshots", "surge_alerts"],
-        "why": "웹에서 보고, 자리비움 시에도 SETUP/TRIGGER/SQUEEZE/DUMP를 텔레그램으로 받습니다.",
+        "purpose": "점수 이력 DB(1년) 보존 + 텔레그램(점수 50+만)",
+        "sources": ["SQLite surge_score_history / surge_alerts", "Telegram Bot API"],
+        "metrics": ["surge_score_history", "surge_alerts"],
+        "why": "텔레그램은 risk_score ≥ 50 일 때만 전송. 점수 이력은 DB에 최대 1년 보관해 나중에 조회합니다.",
     },
 ]
 
@@ -658,6 +660,23 @@ CREATE TABLE IF NOT EXISTS surge_alerts (
     message TEXT,
     sent INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS surge_score_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    risk_score INTEGER NOT NULL,
+    up_score INTEGER,
+    down_score INTEGER,
+    direction TEXT,
+    level TEXT,
+    mark_price REAL,
+    funding_rate REAL,
+    ret_5m_pct REAL,
+    volume_z_5m REAL,
+    alerts_json TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_score_hist_sym_ts ON surge_score_history(symbol, ts);
+CREATE INDEX IF NOT EXISTS idx_score_hist_ts ON surge_score_history(ts);
 """
 
 
@@ -708,6 +727,95 @@ def save_snapshot(conn: sqlite3.Connection, snap: Snapshot) -> int:
     )
     conn.commit()
     return int(cur.lastrowid)
+
+
+def save_score_history(conn: sqlite3.Connection, snap: Snapshot, thresholds: Optional[dict] = None) -> int:
+    """매 수집 틱의 점수를 이력 테이블에 저장 (1년 보관)."""
+    level = None
+    if thresholds:
+        level = alert_level(snap.risk_score, thresholds, snap.direction)
+    cur = conn.execute(
+        """
+        INSERT INTO surge_score_history (
+            ts, symbol, risk_score, up_score, down_score, direction, level,
+            mark_price, funding_rate, ret_5m_pct, volume_z_5m, alerts_json
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        (
+            snap.ts.isoformat(),
+            snap.symbol,
+            int(snap.risk_score or 0),
+            int(snap.up_score or 0),
+            int(snap.down_score or 0),
+            snap.direction or "neutral",
+            level,
+            snap.mark_price,
+            snap.funding_rate,
+            snap.ret_5m_pct,
+            snap.volume_z_5m,
+            json.dumps(snap.alerts, ensure_ascii=False),
+        ),
+    )
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def prune_score_history(conn: sqlite3.Connection, keep_days: int = 365) -> int:
+    """보관 기간을 넘긴 점수 이력 삭제. 삭제된 행 수 반환."""
+    days = max(1, int(keep_days or 365))
+    cutoff = (utc_now() - timedelta(days=days)).isoformat()
+    cur = conn.execute("DELETE FROM surge_score_history WHERE ts < ?", (cutoff,))
+    # 경보 이력도 동일 기간으로 맞춤
+    conn.execute("DELETE FROM surge_alerts WHERE ts < ?", (cutoff,))
+    conn.commit()
+    deleted = int(cur.rowcount or 0)
+    if deleted:
+        logger.info("pruned %s score_history rows older than %s days", deleted, days)
+    return deleted
+
+
+def query_score_history(
+    conn: sqlite3.Connection,
+    symbol: Optional[str] = None,
+    limit: int = 500,
+    days: Optional[int] = None,
+    min_score: int = 0,
+) -> List[dict]:
+    conn.row_factory = sqlite3.Row
+    limit = max(1, min(int(limit), 5000))
+    min_score = max(0, int(min_score or 0))
+    clauses = ["risk_score >= ?"]
+    params: List[Any] = [min_score]
+    if symbol:
+        clauses.append("symbol = ?")
+        params.append(symbol.replace(".P", "").upper())
+    if days is not None and int(days) > 0:
+        cutoff = (utc_now() - timedelta(days=int(days))).isoformat()
+        clauses.append("ts >= ?")
+        params.append(cutoff)
+    where = " AND ".join(clauses)
+    params.append(limit)
+    rows = conn.execute(
+        f"""
+        SELECT id, ts, symbol, risk_score, up_score, down_score, direction, level,
+               mark_price, funding_rate, ret_5m_pct, volume_z_5m, alerts_json
+        FROM surge_score_history
+        WHERE {where}
+        ORDER BY ts DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    out: List[dict] = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["alerts"] = json.loads(d.pop("alerts_json") or "[]")
+        except Exception:
+            d["alerts"] = []
+            d.pop("alerts_json", None)
+        out.append(d)
+    return out
 
 
 def load_state() -> dict:
@@ -821,14 +929,25 @@ def maybe_alert(
     if severe and now - last < cooldown / 2:
         return None
 
+    min_tg = int(scfg.get("telegram_min_score", 50))
+    allow_tg = int(snap.risk_score or 0) >= min_tg
+
     msg = format_alert(snap, level)
     sent = 0
-    if send:
+    if send and allow_tg:
         try:
-            tg_send(cfg, msg)
-            sent = 1
+            if tg_send(cfg, msg):
+                sent = 1
         except Exception as e:
             logger.error("Telegram send failed: %s", e)
+    elif send and not allow_tg:
+        logger.info(
+            "Telegram skipped: score %s < min %s (%s %s)",
+            snap.risk_score,
+            min_tg,
+            snap.symbol,
+            level,
+        )
 
     conn.execute(
         "INSERT INTO surge_alerts (ts, symbol, level, risk_score, message, sent) VALUES (?,?,?,?,?,?)",
@@ -897,9 +1016,11 @@ def run_once(cfg: dict, scfg: dict, send: bool) -> List[Snapshot]:
     state = load_state()
     out: List[Snapshot] = []
     try:
+        prune_score_history(conn, int(scfg.get("score_history_keep_days", 365)))
         for symbol in scfg["symbols"]:
             snap = fetch_snapshot(client, symbol, scfg["lookback_1m_bars"], scfg["thresholds"])
             save_snapshot(conn, snap)
+            save_score_history(conn, snap, scfg.get("thresholds"))
             print_snapshot(snap)
             level = maybe_alert(conn, cfg, scfg, snap, state, send=send)
             if level:

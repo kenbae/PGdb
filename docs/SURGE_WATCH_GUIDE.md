@@ -105,9 +105,14 @@ python surge_watch.py --analyze-day 2026-08-19 --symbol BTCUSDT
 
 1. `python process_manager.py` 실행 후 웹에서 **급등 감시** 카드 시작
 2. 카드의 포트 링크(`http://localhost:8003`)로 대시보드 접속
-3. 경보 발생 시 `config.yaml` 텔레그램으로 SETUP/TRIGGER/SQUEEZE 전송
+3. 경보 발생 시 `config.yaml` 텔레그램으로 SETUP/TRIGGER/SQUEEZE/DUMP 전송 (**risk_score ≥ 50** 만)
+4. 매 수집 틱의 점수는 `surge_score_history` 테이블에 저장되며 **최대 1년** 보관
 
-대시보드에는 데이터 레이어 용도, 지표 사전, 실시간 점수/플래그, 경보 이력이 포함됩니다.
+대시보드에는 데이터 레이어 용도, 지표 사전, 실시간 점수/플래그, **점수 이력**, 경보 이력이 포함됩니다.
+
+설정 관련 (`config.yaml` → `surge_watch`):
+- `telegram_min_score: 50` — 텔레그램 전송 최소 점수
+- `score_history_keep_days: 365` — 점수/경보 이력 보관 일수
 
 ### 서버 재부팅 시 자동 시작 (Windows)
 

@@ -177,6 +177,8 @@ surge_watch:
   db_path: data/surge_watch.db
   lookback_1m_bars: 120
   cooldown_sec: 900
+  telegram_min_score: 50
+  score_history_keep_days: 365
   thresholds:
     funding_negative: -0.00005
     funding_very_negative: -0.0001

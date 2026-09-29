@@ -85,11 +85,15 @@ def _collector_loop(send_telegram: bool) -> None:
             conn = _db()
             state = sw.load_state()
             try:
+                sw.prune_score_history(
+                    conn, int(_SCFG.get("score_history_keep_days", 365))
+                )
                 for symbol in _SCFG["symbols"]:
                     snap = sw.fetch_snapshot(
                         client, symbol, _SCFG["lookback_1m_bars"], _SCFG["thresholds"]
                     )
                     sw.save_snapshot(conn, snap)
+                    sw.save_score_history(conn, snap, _SCFG.get("thresholds"))
                     level = sw.maybe_alert(
                         conn, _CFG, _SCFG, snap, state, send=send_telegram
                     )
@@ -195,6 +199,8 @@ async def api_meta():
         "telegram_configured": _telegram_configured(),
         "db_path": _SCFG.get("db_path"),
         "poll_sec": _SCFG.get("poll_sec"),
+        "telegram_min_score": int(_SCFG.get("telegram_min_score", 50)),
+        "score_history_keep_days": int(_SCFG.get("score_history_keep_days", 365)),
     }
 
 
@@ -294,6 +300,33 @@ async def api_alerts(
     conn = _db()
     try:
         return {"symbol": sym, "alerts": sw.query_alerts(conn, limit, symbol=sym)}
+    finally:
+        conn.close()
+
+
+@app.get("/api/score-history")
+async def api_score_history(
+    symbol: Optional[str] = None,
+    limit: int = Query(300, ge=1, le=5000),
+    days: int = Query(7, ge=1, le=365),
+    min_score: int = Query(0, ge=0, le=100),
+):
+    """점수 이력 (SQLite, 최대 1년 보관)."""
+    _reload_config()
+    sym = _normalize_symbol(symbol) if symbol else None
+    conn = _db()
+    try:
+        rows = sw.query_score_history(
+            conn, symbol=sym, limit=limit, days=days, min_score=min_score
+        )
+        return {
+            "symbol": sym,
+            "days": days,
+            "min_score": min_score,
+            "keep_days": int(_SCFG.get("score_history_keep_days", 365)),
+            "telegram_min_score": int(_SCFG.get("telegram_min_score", 50)),
+            "rows": rows,
+        }
     finally:
         conn.close()
 
