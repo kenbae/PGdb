@@ -61,20 +61,29 @@ class BinanceLive:
         self.emergency_stop = False
         
         # CCXT 거래소 객체 (선물 전용)
+        # fetchCurrencies는 spot sapi(/sapi/v1/capital/config/getall)를 호출해
+        # 지역 제한 IP에서 HTTP 451을 유발하므로 비활성화합니다.
         self.exchange = ccxt.binanceusdm({
             'apiKey': self.api_key,
             'secret': self.api_secret,
             'enableRateLimit': True,
             'options': {
-                'adjustForTimeDifference': True
+                'adjustForTimeDifference': True,
+                'defaultType': 'future',
             }
         })
+        self.exchange.has['fetchCurrencies'] = False
 
         # 실전 모드 (샌드박스 비활성화)
         self.exchange.set_sandbox_mode(False)
 
-        # 마켓 정보 로드 (정밀도 처리용) - 선물만 로드
-        self.exchange.load_markets()
+        # 마켓 정보 로드 (정밀도 처리용) - 선물 exchangeInfo만 사용
+        try:
+            self.exchange.load_markets()
+        except Exception as e:
+            # 지역 제한 등으로 fapi도 막힌 환경에서는 상위에서 degraded 기동 가능
+            logger.error(f"❌ load_markets 실패: {e}")
+            raise
 
         logger.warning("⚠️⚠️⚠️ 실전 모드 활성화! ⚠️⚠️⚠️")
         logger.info(f"   최대 포지션: {max_positions}개")
