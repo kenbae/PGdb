@@ -70,35 +70,42 @@ async def lifespan(app: FastAPI):
     """서버 시작/종료 시 실행"""
     global exchange
 
+    logger.info("🚀 주문 서버 시작...")
+
+    # Config 로드
+    config = get_config()
+    logger.info("✅ Config 로드")
+
+    # 거래소 연결 (API 키를 문자열로 전달)
+    import os
+    api_key = (
+        os.getenv('BINANCE_LIVE_API_KEY')
+        or config.get('api.binance.live.api_key')
+        or config.get('binance.api_key')
+    )
+    api_secret = (
+        os.getenv('BINANCE_LIVE_API_SECRET')
+        or config.get('api.binance.live.api_secret')
+        or config.get('binance.api_secret')
+    )
+
     try:
-        logger.info("🚀 주문 서버 시작...")
-
-        # Config 로드
-        config = get_config()
-        logger.info("✅ Config 로드")
-
-        # 거래소 연결 (API 키를 문자열로 전달)
-        import os
-        api_key = os.getenv('BINANCE_LIVE_API_KEY') or config.get('binance.api_key')
-        api_secret = os.getenv('BINANCE_LIVE_API_SECRET') or config.get('binance.api_secret')
-
         exchange = BinanceLive(api_key=api_key, api_secret=api_secret)
         logger.info("✅ 바이낸스 거래소 연결")
 
         # 연결 테스트
         balance = exchange.get_balance()
         logger.info(f"✅ 잔고: ${balance['total']:.2f}")
-
         logger.info("🎉 주문 서버 준비 완료!")
-
-        yield
-
-        # 종료
-        logger.info("👋 주문 서버 종료")
-
     except Exception as e:
-        logger.error(f"❌ 서버 시작 실패: {e}")
-        raise
+        # 지역 제한(HTTP 451) 등으로 거래소 연결이 안 되어도 API 서버는 유지
+        exchange = None
+        logger.error(f"❌ 거래소 연결 실패 (degraded 모드로 기동): {e}")
+        logger.warning("⚠️ 주문 API는 503을 반환합니다. 허용 지역 IP에서 재시작하세요.")
+
+    yield
+
+    logger.info("👋 주문 서버 종료")
 
 
 # ============================================================
@@ -131,7 +138,8 @@ async def root():
     """루트 엔드포인트"""
     return {
         "service": "Order Execution Server",
-        "status": "running",
+        "status": "running" if exchange else "degraded",
+        "exchange_connected": exchange is not None,
         "port": 8889
     }
 
@@ -142,7 +150,11 @@ async def health_check():
     try:
         # 거래소 연결 확인
         if not exchange:
-            raise Exception("거래소 연결 없음")
+            return {
+                "status": "degraded",
+                "exchange": "disconnected",
+                "detail": "Binance 연결 없음 (지역 제한 또는 초기화 실패)",
+            }
 
         balance = exchange.get_balance()
 
@@ -384,9 +396,9 @@ async def get_balance():
 
 if __name__ == "__main__":
     uvicorn.run(
-        "order_server:app",
+        app,
         host="0.0.0.0",
         port=8889,
-        reload=True,
+        reload=False,
         log_level="info"
     )

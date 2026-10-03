@@ -61,7 +61,7 @@ def get_engine():
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """메인 대시보드 페이지"""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 # ============================================================
